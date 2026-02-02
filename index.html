@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>NOTAM Viewer</title>
+	<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+	<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+	<div class="container">
+		<h1>NOTAM Viewer</h1>
+
+		<div class="description">
+			<p>This tool parses NOTAMs and displays their geographic coordinates (PSN) on an interactive map. You can copy and paste NOTAMs directly from <a href="https://sofia-briefing.aviation-civile.gouv.fr/" target="_blank">SOFIA-Briefing</a> or <a href="https://www.autorouter.aero/notam" target="_blank">autorouter</a> into the text field below. Only NOTAMs containing PSN coordinates will be displayed.</p>
+		</div>
+
+		<div class="main-content">
+			<div class="input-section">
+				<h2>Enter NOTAMs</h2>
+				<textarea id="notamInput" placeholder="Paste your NOTAMs here..."></textarea>
+				<div class="button-row">
+					<label class="file-upload-btn">
+						Upload file
+						<input type="file" id="fileInput" accept=".txt" />
+					</label>
+					<button id="parseBtn">Display on map</button>
+					<button id="clearBtn" class="clear-btn">Clear</button>
+					<a href="https://sofia-briefing.aviation-civile.gouv.fr/" target="_blank" class="sofia-link">SOFIA-Briefing</a>
+				</div>
+			</div>
+
+			<div class="map-section">
+				<h2>Map <span class="map-buttons"><button id="printBtn" class="print-btn">Print</button><button id="fullscreenBtn" class="fullscreen-btn">Full screen</button></span></h2>
+				<div id="map"></div>
+			</div>
+
+			<div class="results-section">
+				<h2>Parsed NOTAMs</h2>
+				<ul id="coordinatesList" class="coordinates-list">
+					<li class="no-results">No NOTAM parsed yet. Enter NOTAMs and click "Display on map".</li>
+				</ul>
+			</div>
+		</div>
+	</div>
+
+	<footer>
+		<p>&copy; 2026 David du Colombier - <a href="license.html">MIT License</a> - <a href="https://github.com/0intro/notam-viewer">GitHub</a></p>
+	</footer>
+
+	<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+	<script src="https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+	<script src="https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+	<script src="script.js"></script>
+</body>
+</html>
