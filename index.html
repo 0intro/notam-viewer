@@ -12,7 +12,7 @@
 		<h1>NOTAM Viewer</h1>
 
 		<div class="description">
-			<p>This tool parses NOTAMs and displays their geographic coordinates (PSN) on an interactive map. You can copy and paste NOTAMs directly from <a href="https://sofia-briefing.aviation-civile.gouv.fr/" target="_blank">SOFIA-Briefing</a> or <a href="https://www.autorouter.aero/notam" target="_blank">autorouter</a> into the text field below. Only NOTAMs containing PSN coordinates will be displayed.</p>
+			<p>This tool parses NOTAMs and displays their geographic coordinates on an interactive map. You can copy and paste NOTAMs directly from <a href="https://sofia-briefing.aviation-civile.gouv.fr/" target="_blank">SOFIA-Briefing</a> or <a href="https://www.autorouter.aero/notam" target="_blank">autorouter</a> into the text field below. NOTAMs with PSN (position) coordinates are shown by default (red markers). Enabling "Show all NOTAMs" will also show all other NOTAMs using qualifier line coordinates and radius (blue markers).</p>
 		</div>
 
 		<div class="main-content">
@@ -26,6 +26,10 @@
 					</label>
 					<button id="parseBtn">Display on map</button>
 					<button id="clearBtn" class="clear-btn">Clear</button>
+					<label class="checkbox-label">
+						<input type="checkbox" id="showAllNotams" />
+						Show all NOTAMs
+					</label>
 					<a href="https://sofia-briefing.aviation-civile.gouv.fr/" target="_blank" class="sofia-link">SOFIA-Briefing</a>
 				</div>
 			</div>

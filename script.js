@@ -61,7 +61,60 @@ const baseLayers = {
 
 L.control.layers(baseLayers, null, { position: 'topright' }).addTo(map);
 
+// Red marker icon for qualifier line coordinates
+const redIcon = L.icon({
+	iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+	shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+	iconSize: [25, 41],
+	iconAnchor: [12, 41],
+	popupAnchor: [1, -34],
+	shadowSize: [41, 41]
+});
+
+// Default blue marker icon
+const blueIcon = L.icon({
+	iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
+	shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+	iconSize: [25, 41],
+	iconAnchor: [12, 41],
+	popupAnchor: [1, -34],
+	shadowSize: [41, 41]
+});
+
 let markers = [];
+let radiusCircle = null; // Current radius circle on map
+
+// Parse qualifier line coordinate string to decimal degrees
+// Format: 4840N00305E005 = 48°40'N, 003°05'E, 5NM radius
+function parseQualifierLineCoordinate(qualifierLineCoord) {
+	// Match format: DDMMN/S + DDDMME/W + optional radius
+	const match = qualifierLineCoord.match(/^(\d{4})([NS])(\d{5})([EW])(\d{3})?$/i);
+	if (!match) {
+		return null;
+	}
+
+	const latStr = match[1]; // DDMM
+	const latDir = match[2].toUpperCase();
+	const lonStr = match[3]; // DDDMM
+	const lonDir = match[4].toUpperCase();
+	const radius = match[5] ? parseInt(match[5], 10) : null;
+
+	// Parse latitude: DDMM
+	const latDeg = parseInt(latStr.substring(0, 2), 10);
+	const latMin = parseInt(latStr.substring(2, 4), 10);
+
+	// Parse longitude: DDDMM
+	const lonDeg = parseInt(lonStr.substring(0, 3), 10);
+	const lonMin = parseInt(lonStr.substring(3, 5), 10);
+
+	let lat = latDeg + latMin / 60;
+	let lon = lonDeg + lonMin / 60;
+
+	if (latDir === 'S') lat = -lat;
+	if (lonDir === 'W') lon = -lon;
+
+	return { lat, lon, radius };
+}
 
 // Parse DMS coordinate string to decimal degrees
 function parseDMSCoordinate(coordStr) {
@@ -169,17 +222,45 @@ function parseNotams(text) {
 				coordinates.push({
 					original: coordStr.trim().split(/\s{2,}/)[0], // Clean up extra spaces
 					lat: coords.lat,
-					lon: coords.lon
+					lon: coords.lon,
+					type: 'psn'
 				});
 			}
 		}
+
+		// Find qualifier line coordinates only if no PSN coordinates found
+		// Format: Q) LFFF / QOBCE / IV / M / A / 000/999 / 4845N00207E005
+		// Radius (last 3 digits) is optional: 4845N00207E or 4845N00207E005
+		// Note: altitude field (000/999) contains a slash, so we just match the coordinate at the end
+		if (coordinates.length === 0) {
+			const qualifierLineMatches = content.matchAll(/Q\).*?(\d{4}[NS]\d{5}[EW](?:\d{3})?)/gi);
+
+			for (const match of qualifierLineMatches) {
+				const qualifierCoordStr = match[1];
+				const coords = parseQualifierLineCoordinate(qualifierCoordStr);
+				if (coords) {
+					coordinates.push({
+						original: qualifierCoordStr,
+						lat: coords.lat,
+						lon: coords.lon,
+						radius: coords.radius,
+						type: 'qualifierLine'
+					});
+				}
+			}
+		}
+
+		// Extract ICAO codes from A) line
+		const icaoMatch = content.match(/A\)\s*([A-Z]{4}(?:\s+[A-Z]{4})*)/i);
+		const icaoCodes = icaoMatch ? icaoMatch[1].split(/\s+/) : [];
 
 		// Only keep NOTAMs with valid coordinates
 		if (coordinates.length > 0) {
 			notams.push({
 				id: notamId,
 				fullContent: cleanNotamContent(content),
-				coordinates: coordinates
+				coordinates: coordinates,
+				icaoCodes: icaoCodes
 			});
 		}
 	}
@@ -187,10 +268,207 @@ function parseNotams(text) {
 	return notams;
 }
 
-// Clear existing markers
+// Clear existing markers and radius circle
 function clearMarkers() {
 	markers.forEach(marker => map.removeLayer(marker));
 	markers = [];
+	if (radiusCircle) {
+		map.removeLayer(radiusCircle);
+		radiusCircle = null;
+	}
+}
+
+// Canvas renderer for circles (better compatibility with html2canvas for PDF export)
+const canvasRenderer = L.canvas();
+
+// Show radius circle for a location (radius in NM)
+function showRadiusCircle(lat, lon, radiusNM) {
+	if (radiusCircle) {
+		map.removeLayer(radiusCircle);
+	}
+	// Convert NM to meters (1 NM = 1852 m)
+	const radiusMeters = radiusNM * 1852;
+	radiusCircle = L.circle([lat, lon], {
+		radius: radiusMeters,
+		color: '#0078d4',
+		fillColor: '#0078d4',
+		fillOpacity: 0.15,
+		weight: 2,
+		renderer: canvasRenderer
+	}).addTo(map);
+}
+
+// Hide radius circle
+function hideRadiusCircle() {
+	if (radiusCircle) {
+		map.removeLayer(radiusCircle);
+		radiusCircle = null;
+	}
+}
+
+// Generate a location key for grouping (rounded to ~10m precision)
+function locationKey(lat, lon) {
+	return `${lat.toFixed(4)}_${lon.toFixed(4)}`;
+}
+
+// Group NOTAMs by location and ICAO codes
+function groupNotamsByLocation(notams, showAll) {
+	const locationGroups = new Map();
+
+	notams.forEach((notam) => {
+		const filteredCoords = showAll
+			? notam.coordinates
+			: notam.coordinates.filter(c => c.type === 'psn');
+
+		filteredCoords.forEach((coord) => {
+			const icaoKey = notam.icaoCodes.slice().sort().join(',');
+			const key = `${locationKey(coord.lat, coord.lon)}_${icaoKey}`;
+			if (!locationGroups.has(key)) {
+				locationGroups.set(key, {
+					lat: coord.lat,
+					lon: coord.lon,
+					locationKey: locationKey(coord.lat, coord.lon),
+					icaoCodes: notam.icaoCodes.slice(),
+					notams: [],
+					hasQualifierLine: false,
+					radius: null
+				});
+			}
+			const group = locationGroups.get(key);
+			group.notams.push({
+				id: notam.id,
+				fullContent: notam.fullContent,
+				type: coord.type,
+				radius: coord.radius
+			});
+			if (coord.type === 'qualifierLine') {
+				group.hasQualifierLine = true;
+				if (coord.radius) group.radius = coord.radius;
+			}
+		});
+	});
+
+	return locationGroups;
+}
+
+// Build map of location to groups for navigation between overlapping markers
+function buildLocationToGroupsMap(locationGroups) {
+	const locationToGroups = new Map();
+	locationGroups.forEach((group, key) => {
+		const locKey = group.locationKey;
+		if (!locationToGroups.has(locKey)) {
+			locationToGroups.set(locKey, []);
+		}
+		locationToGroups.get(locKey).push({ key, group });
+	});
+	return locationToGroups;
+}
+
+// Build popup HTML content
+function buildPopupHtml(group, navInfo) {
+	const { groupIndex, totalAtLocation, hasMultipleAtLocation } = navInfo;
+	const notamCount = group.notams.length;
+
+	const navHtml = hasMultipleAtLocation ? `
+		<div class="popup-nav">
+			<button class="popup-nav-btn popup-nav-prev" title="Previous">&larr;</button>
+			<span class="popup-nav-counter">${groupIndex + 1} / ${totalAtLocation}</span>
+			<button class="popup-nav-btn popup-nav-next" title="Next">&rarr;</button>
+		</div>
+	` : '';
+
+	const icaoDisplay = group.icaoCodes.length > 0
+		? `<div class="popup-icao">${group.icaoCodes.join(' ')}</div>`
+		: '';
+
+	const countBadge = `<span class="popup-count">${notamCount} NOTAM${notamCount > 1 ? 's' : ''}</span>`;
+
+	const radiusInfo = group.radius
+		? `<div class="popup-radius">Radius: ${group.radius} NM</div>`
+		: '';
+
+	const notamsList = group.notams.map(n => `
+		<div class="popup-notam">
+			<strong>${n.id}</strong>
+			<pre class="popup-content">${n.fullContent}</pre>
+		</div>
+	`).join('<hr class="popup-divider">');
+
+	return `
+		<div class="notam-popup">
+			${navHtml}
+			<div class="popup-header">
+				${icaoDisplay}
+				<div class="popup-coords">${group.lat.toFixed(6)}, ${group.lon.toFixed(6)}</div>
+				${countBadge}
+			</div>
+			${radiusInfo}
+			<div class="popup-notams-list">
+				${notamsList}
+			</div>
+		</div>
+	`;
+}
+
+// Build list item HTML content
+function buildListItemHtml(group, posIndex) {
+	const notamCount = group.notams.length;
+	const notamIds = group.notams.map(n => n.id).join(', ');
+	const countLabel = notamCount > 1 ? ` (${notamCount} NOTAMs)` : '';
+	const listIcaoDisplay = group.icaoCodes.length > 0
+		? `<span class="list-icao">${group.icaoCodes.join(' ')}</span>`
+		: '';
+
+	return `
+		<div class="notam-header">
+			<span class="coord-label">#${posIndex}</span>
+			${listIcaoDisplay}
+			<strong>${notamIds}</strong>${countLabel}
+		</div>
+		<div class="notam-contents">
+			${group.notams.map(n => `
+				<div class="notam-entry">
+					<div class="notam-entry-id">${n.id}</div>
+					<pre class="notam-content">${n.fullContent}</pre>
+				</div>
+			`).join('<hr class="notam-divider">')}
+		</div>
+	`;
+}
+
+// Set up marker event handlers for popup navigation and radius circle
+function setupMarkerEvents(marker, group, navInfo, markerMap) {
+	const { groupIndex, totalAtLocation, hasMultipleAtLocation, groupsAtLocation } = navInfo;
+
+	marker.on('popupopen', () => {
+		if (group.hasQualifierLine && group.radius) {
+			showRadiusCircle(group.lat, group.lon, group.radius);
+		}
+
+		if (hasMultipleAtLocation) {
+			const popup = marker.getPopup().getElement();
+			const prevBtn = popup.querySelector('.popup-nav-prev');
+			const nextBtn = popup.querySelector('.popup-nav-next');
+
+			prevBtn.onclick = () => {
+				const prevIndex = (groupIndex - 1 + totalAtLocation) % totalAtLocation;
+				const prevMarker = markerMap.get(groupsAtLocation[prevIndex].key);
+				marker.closePopup();
+				prevMarker.openPopup();
+			};
+
+			nextBtn.onclick = () => {
+				const nextIndex = (groupIndex + 1) % totalAtLocation;
+				const nextMarker = markerMap.get(groupsAtLocation[nextIndex].key);
+				marker.closePopup();
+				nextMarker.openPopup();
+			};
+		}
+	});
+
+	marker.on('popupclose', () => {
+		hideRadiusCircle();
+	});
 }
 
 // Main function to parse and display
@@ -198,52 +476,58 @@ function parseAndDisplay() {
 	const input = document.getElementById('notamInput').value;
 	const notams = parseNotams(input);
 	const listEl = document.getElementById('coordinatesList');
+	const showAll = document.getElementById('showAllNotams').checked;
 
 	clearMarkers();
 	listEl.innerHTML = '';
 
 	if (notams.length === 0) {
-		listEl.innerHTML = '<li class="no-results">No NOTAMs with PSN coordinates found.</li>';
+		listEl.innerHTML = '<li class="no-results">No NOTAMs with coordinates found.</li>';
 		return;
 	}
 
+	const locationGroups = groupNotamsByLocation(notams, showAll);
+
+	if (locationGroups.size === 0) {
+		listEl.innerHTML = '<li class="no-results">No NOTAMs with PSN coordinates found. Enable "Show all NOTAMs" to include qualifier line coordinates.</li>';
+		return;
+	}
+
+	const locationToGroups = buildLocationToGroupsMap(locationGroups);
 	const bounds = [];
+	const markerMap = new Map();
 	let posIndex = 1;
 
-	notams.forEach((notam) => {
-		notam.coordinates.forEach((coord) => {
-			// Add marker to map
-			const marker = L.marker([coord.lat, coord.lon]).addTo(map);
-			marker.bindPopup(`
-				<div class="notam-popup">
-					<strong>${notam.id}</strong>
-					<div class="popup-coords">${coord.lat.toFixed(6)}, ${coord.lon.toFixed(6)}</div>
-					<pre class="popup-content">${notam.fullContent}</pre>
-				</div>
-			`, { maxWidth: 600, maxHeight: 400 });
-			markers.push(marker);
-			bounds.push([coord.lat, coord.lon]);
+	locationGroups.forEach((group, key) => {
+		const groupsAtLocation = locationToGroups.get(group.locationKey);
+		const groupIndex = groupsAtLocation.findIndex(g => g.key === key);
+		const totalAtLocation = groupsAtLocation.length;
+		const hasMultipleAtLocation = totalAtLocation > 1;
+		const navInfo = { groupIndex, totalAtLocation, hasMultipleAtLocation, groupsAtLocation };
 
-			// Add to list
-			const li = document.createElement('li');
-			li.innerHTML = `
-				<div class="notam-header">
-					<span class="coord-label">#${posIndex}</span>
-					<strong>${notam.id}</strong>
-				</div>
-				<pre class="notam-content">${notam.fullContent}</pre>
-			`;
-			li.querySelector('.notam-header').onclick = () => {
-				map.setView([coord.lat, coord.lon], 12);
-				marker.openPopup();
-				document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'center' });
-			};
-			listEl.appendChild(li);
-			posIndex++;
-		});
+		// First marker at a location gets higher z-index so it's clickable
+		const zIndexOffset = hasMultipleAtLocation ? (totalAtLocation - groupIndex) * 100 : 0;
+		const icon = group.hasQualifierLine ? blueIcon : redIcon;
+		const marker = L.marker([group.lat, group.lon], { icon, zIndexOffset }).addTo(map);
+
+		marker.bindPopup(buildPopupHtml(group, navInfo), { maxWidth: 600, maxHeight: 500 });
+		setupMarkerEvents(marker, group, navInfo, markerMap);
+
+		markers.push(marker);
+		bounds.push([group.lat, group.lon]);
+		markerMap.set(key, marker);
+
+		const li = document.createElement('li');
+		li.innerHTML = buildListItemHtml(group, posIndex);
+		li.querySelector('.notam-header').onclick = () => {
+			map.setView([group.lat, group.lon], 12);
+			marker.openPopup();
+			document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'center' });
+		};
+		listEl.appendChild(li);
+		posIndex++;
 	});
 
-	// Fit map to show all markers
 	if (bounds.length > 0) {
 		map.fitBounds(bounds, { padding: [50, 50] });
 	}
@@ -302,12 +586,20 @@ async function printMapToPdf() {
 	const controls = mapEl.querySelectorAll('.leaflet-control-zoom, .leaflet-control-layers');
 	controls.forEach(el => el.style.display = 'none');
 
+	// Force map to recalculate and wait for tiles/SVG to settle
+	map.invalidateSize();
+	await new Promise(resolve => setTimeout(resolve, 500));
+
 	try {
 		// Capture the map element
 		const canvas = await html2canvas(mapEl, {
 			useCORS: true,
 			allowTaint: true,
-			logging: false
+			logging: false,
+			ignoreElements: (element) => {
+				// Ignore elements that may cause positioning issues
+				return element.classList && element.classList.contains('leaflet-control-container');
+			}
 		});
 
 		// A4 landscape dimensions in mm and aspect ratio

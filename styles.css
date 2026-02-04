@@ -133,6 +133,21 @@ button:hover {
 	background: #5a6268;
 }
 
+.checkbox-label {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 0.95rem;
+	color: #333;
+	cursor: pointer;
+}
+
+.checkbox-label input[type="checkbox"] {
+	width: 16px;
+	height: 16px;
+	cursor: pointer;
+}
+
 .sofia-link {
 	color: #0078d4;
 	text-decoration: none;
@@ -285,6 +300,9 @@ button:hover {
 
 .notam-popup {
 	font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+	display: flex;
+	flex-direction: column;
+	max-height: 450px;
 }
 
 .notam-popup strong {
@@ -307,8 +325,118 @@ button:hover {
 	font-size: 11px;
 	line-height: 1.3;
 	white-space: pre;
-	max-height: 300px;
-	overflow: auto;
+}
+
+.popup-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 5px;
+	flex-shrink: 0;
+}
+
+.popup-count {
+	background: #0078d4;
+	color: white;
+	padding: 2px 8px;
+	border-radius: 12px;
+	font-size: 11px;
+	font-weight: bold;
+}
+
+.popup-radius {
+	color: #856404;
+	background: #fff3cd;
+	padding: 3px 8px;
+	border-radius: 4px;
+	font-size: 11px;
+	margin-bottom: 8px;
+	display: inline-block;
+	flex-shrink: 0;
+}
+
+.popup-notams-list {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+}
+
+.popup-notam {
+	padding: 5px 0;
+}
+
+.popup-notam strong {
+	display: block;
+	margin-bottom: 3px;
+}
+
+.popup-divider {
+	border: none;
+	border-top: 1px solid #ddd;
+	margin: 8px 0;
+}
+
+.notam-divider {
+	border: none;
+	border-top: 1px solid #ddd;
+	margin: 10px 0;
+}
+
+.notam-contents {
+	margin-top: 10px;
+}
+
+.notam-entry-id {
+	color: #0078d4;
+	font-weight: bold;
+	margin-bottom: 5px;
+}
+
+.popup-icao {
+	font-weight: bold;
+	color: #333;
+	font-size: 1.1em;
+	margin-bottom: 2px;
+}
+
+.popup-nav {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 10px;
+	padding: 6px 0;
+	margin-bottom: 8px;
+	border-bottom: 1px solid #ddd;
+	flex-shrink: 0;
+}
+
+.popup-nav-btn {
+	background: #0078d4;
+	color: white;
+	border: none;
+	border-radius: 4px;
+	padding: 4px 10px;
+	cursor: pointer;
+	font-size: 14px;
+	font-weight: bold;
+}
+
+.popup-nav-btn:hover {
+	background: #005a9e;
+}
+
+.popup-nav-counter {
+	font-size: 13px;
+	color: #666;
+}
+
+.list-icao {
+	background-color: #e8f4fc;
+	color: #0078d4;
+	padding: 2px 6px;
+	border-radius: 3px;
+	font-weight: bold;
+	margin-right: 8px;
 }
 
 footer {
