@@ -84,6 +84,28 @@ const blueIcon = L.icon({
 let markers = [];
 let radiusCircle = null; // Current radius circle on map
 
+// Format decimal degrees to DMS (Degrees Minutes Seconds) format
+// Example: 46.6468611, 14.3392 -> "46°38'48.7"N / 014°20'21.1"E"
+function formatDMS(lat, lon) {
+	// Format latitude
+	const latAbs = Math.abs(lat);
+	const latDeg = Math.floor(latAbs);
+	const latMinDec = (latAbs - latDeg) * 60;
+	const latMin = Math.floor(latMinDec);
+	const latSec = ((latMinDec - latMin) * 60).toFixed(1);
+	const latDir = lat >= 0 ? 'N' : 'S';
+
+	// Format longitude (pad degrees with leading zeros to 3 digits)
+	const lonAbs = Math.abs(lon);
+	const lonDeg = Math.floor(lonAbs);
+	const lonMinDec = (lonAbs - lonDeg) * 60;
+	const lonMin = Math.floor(lonMinDec);
+	const lonSec = ((lonMinDec - lonMin) * 60).toFixed(1);
+	const lonDir = lon >= 0 ? 'E' : 'W';
+
+	return `${latDeg}°${latMin.toString().padStart(2, '0')}'${latSec.padStart(4, '0')}"${latDir} / ${lonDeg.toString().padStart(3, '0')}°${lonMin.toString().padStart(2, '0')}'${lonSec.padStart(4, '0')}"${lonDir}`;
+}
+
 // Parse qualifier line coordinate string to decimal degrees
 // Format: 4840N00305E005 = 48°40'N, 003°05'E, 5NM radius
 function parseQualifierLineCoordinate(qualifierLineCoord) {
@@ -453,11 +475,18 @@ function buildListItemHtml(group, posIndex) {
 		? `<span class="list-icao">${group.icaoCodes.join(' ')}</span>`
 		: '';
 
+	// Show DMS position for PSN NOTAMs
+	const isPsnNotam = group.notams.some(n => n.type === 'psn');
+	const positionLabel = isPsnNotam
+		? `<span class="notam-position">${formatDMS(group.lat, group.lon)}</span>`
+		: '';
+
 	return `
 		<div class="notam-header">
 			<span class="coord-label">#${posIndex}</span>
 			${listIcaoDisplay}
 			<strong>${notamIds}</strong>${countLabel}
+			${positionLabel}
 		</div>
 		<div class="notam-contents">
 			${group.notams.map(n => `
