@@ -208,12 +208,14 @@ function parseNotams(text) {
 
 	// Split into individual NOTAMs using the NOTAM ID pattern
 	// Support SOFIA-Briefing format (LFFF-A1234/25) and autorouter formats (LFFF A1234/25 and A1234/25)
-	const notamPattern = /(?:^|\n)\s*((?:[A-Z]{4}[\s-])?[A-Z]\d+\/\d+)/g;
+	// Action suffixes (NOTAM, NOTAMN, NOTAMR, NOTAMC) are captured but will be stripped
+	const notamPattern = /(?:^|\n)\s*((?:[A-Z]{4}[\s-])?[A-Z]\d+\/\d+)\s*(?:NOTAM[NRC]?)?/gi;
 	const parts = text.split(notamPattern);
 
 	// Process pairs: [before, id1, content1, id2, content2, ...]
 	for (let i = 1; i < parts.length; i += 2) {
-		const notamId = parts[i];
+		// Strip any trailing action suffix from the ID
+		const notamId = parts[i].replace(/\s*NOTAM[NRC]?\s*$/i, '').trim();
 		let content = parts[i + 1] || '';
 
 		// NOTAM content ends at an empty line
