@@ -455,7 +455,7 @@ function buildPopupHtml(group, navInfo) {
 			${navHtml}
 			<div class="popup-header">
 				${icaoDisplay}
-				<div class="popup-coords">${group.lat.toFixed(6)}, ${group.lon.toFixed(6)}</div>
+				<div class="popup-coords">${formatDMS(group.lat, group.lon)}</div>
 				${countBadge}
 			</div>
 			${radiusInfo}
