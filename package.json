@@ -1,0 +1,27 @@
+{
+  "name": "notam-viewer",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "A web-based tool to parse NOTAMs and display their geographic coordinates on an interactive map",
+  "scripts": {
+    "lint": "npm run lint:html && npm run lint:css && npm run lint:js",
+    "lint:html": "htmlhint *.html",
+    "lint:css": "stylelint \"*.css\"",
+    "lint:js": "eslint \"*.js\""
+  },
+  "keywords": [
+    "notam",
+    "aviation"
+  ],
+  "author": "David du Colombier",
+  "license": "MIT",
+  "devDependencies": {
+    "@eslint/js": "^9.39.2",
+    "@stylistic/stylelint-plugin": "^5.0.1",
+    "eslint": "^9.39.2",
+    "globals": "^17.3.0",
+    "htmlhint": "^1.8.0",
+    "stylelint": "^17.1.1",
+    "stylelint-config-standard": "^40.0.0"
+  }
+}
