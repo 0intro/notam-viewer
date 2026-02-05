@@ -225,19 +225,40 @@ function parseNotams(text) {
 		}
 
 		// Find all PSN coordinates in this NOTAM
-		const psnMatches = content.matchAll(/PSN\s*:?\s*([^\n]+)/gi);
+		// PSN can be followed by multiple coordinates on multiple lines
+		// Example: PSN 762200N 0215500E - 752400N 0244300E - 745100N 0214500E
 		const coordinates = [];
+		const seenPositions = new Set(); // Track positions to deduplicate
+		const psnMatches = content.matchAll(/PSN\s*:?\s*([^\n]+(?:\n(?![A-Z]\))[^\n]+)*)/gi);
 
 		for (const match of psnMatches) {
-			const coordStr = match[1];
-			const coords = parseDMSCoordinate(coordStr);
-			if (coords) {
-				coordinates.push({
-					original: coordStr.trim().split(/\s{2,}/)[0], // Clean up extra spaces
-					lat: coords.lat,
-					lon: coords.lon,
-					type: 'psn'
-				});
+			// Extract text after PSN, which may span multiple lines
+			let psnText = match[1];
+
+			// Split on delimiters: dash, comma, or parentheses
+			// Keep coordinate pairs together by splitting on patterns between coordinates
+			const coordPairs = psnText.split(/\s*[-,()]\s*|\s*\n\s*/);
+
+			for (const coordStr of coordPairs) {
+				const trimmed = coordStr.trim();
+				if (!trimmed) continue;
+
+				const coords = parseDMSCoordinate(trimmed);
+				if (coords) {
+					// Create position key for deduplication (rounded to ~1m precision)
+					const posKey = `${coords.lat.toFixed(6)}_${coords.lon.toFixed(6)}`;
+
+					// Only add if we haven't seen this position before
+					if (!seenPositions.has(posKey)) {
+						seenPositions.add(posKey);
+						coordinates.push({
+							original: trimmed,
+							lat: coords.lat,
+							lon: coords.lon,
+							type: 'psn'
+						});
+					}
+				}
 			}
 		}
 
