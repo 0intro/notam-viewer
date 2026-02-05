@@ -136,10 +136,21 @@ function parseDMSCoordinate(coordStr) {
 		return null;
 	}
 
-	const latStr = match[1];
+	let latStr = match[1];
 	const latDir = (match[2] || 'N').toUpperCase(); // Default to North
-	const lonStr = match[3];
+	let lonStr = match[3];
 	const lonDir = (match[4] || 'E').toUpperCase(); // Default to East
+
+	// Handle 7-digit longitudes (missing either leading zero or tenths of seconds)
+	if (lonStr.length === 7 && !lonStr.includes('.')) {
+		// If starts with 0, append zero for tenths of seconds: 0022140 -> 00221400
+		// If doesn't start with 0, prepend zero for degrees: 1420211 -> 01420211
+		if (lonStr[0] === '0') {
+			lonStr = lonStr + '0';
+		} else {
+			lonStr = '0' + lonStr;
+		}
+	}
 
 	// Parse latitude: DDMMSS or DDMMSSs (7th digit is tenths of seconds)
 	let latDeg, latMin, latSec;
