@@ -10,30 +10,46 @@ A web-based tool to parse NOTAMs (Notice to Airmen) and display their geographic
 - Direct copy/paste from [SOFIA-Briefing](https://sofia-briefing.aviation-civile.gouv.fr/) and [autorouter](https://www.autorouter.aero/notam)
 - Export map to PDF
 
-## Supported NOTAM format
+## Supported NOTAM formats
+
+### NOTAM sections
+
+The parser recognizes standard ICAO NOTAM sections. NOTAM content ends at a blank line.
+
+### Coordinate extraction
 
 The parser extracts coordinates from three sources:
 
-### 1. Position coordinates (red markers)
+#### 1. Position coordinates (red markers)
 
-Positions are detected when the E) section contains the `PSN` keyword followed by one or two coordinates in DMS format:
+Coordinates are extracted from the E) section when one of these keywords is detected (non-exhaustive):
+- `PSN` — position
+- `CENTRE` / `CENTRED` / `CENTER` / `CENTERED` — circle center
+- `OBST` — obstacle (in E) section text or `QOB` Q-code in Q) section)
 
-- Latitude: DDMMSS[.ss]N/S (e.g., 484024N, 483923.17N)
-- Longitude: DDDMMSS[.ss]E/W (e.g., 0030441E, 0035848.18E)
+The following DMS (degrees-minutes-seconds) coordinate formats are supported:
+
+| Format | Latitude | Longitude | Example |
+|--------|----------|-----------|---------|
+| Standard | DDMMSSN/S | DDDMMSSE/W | `484024N 0030441E` |
+| Decimal seconds | DDMMSS.ssN/S | DDDMMSS.ssE/W | `483923.17N 0035848.18E` |
+| High-precision | DDMMSS.sssN/S | DDDMMSS.sssE/W | `455554.997N 0060439.322E` |
+| Without space | DDMMSSN/S DDDMMSSE/W | | `161514N0611540W` |
+| Implicit decimal | DDDMMSSSN/S | DDDMMSSSE/W | `4908325N` (= 49°08'32.5") |
+
+When the `RADIUS` keyword is present near the position, the radius is extracted and displayed as an orange circle. Supported radius units are NM (nautical miles), KM (kilometers), and M (meters). Decimal numbers with both `.` and `,` separators are accepted.
 
 Example:
 ```
 E) OBSTACLE AT PSN 490204N 0022140E
 ```
 
-When the `RADIUS` keyword is present near the position, the radius is extracted and displayed. On the map, positions with a radius are shown with an orange circle.
-
-### 2. Area coordinates (orange polygons)
+#### 2. Area coordinates (orange polygons)
 
 Areas are detected when the E) section contains multiple coordinates (3+) that define a boundary. The parser recognizes areas through:
 
 **Area keywords (non-exhaustive):**
-- `LIMITES LATERALES` / `LATERAL LIMITS`
+- `LATERAL LIMITS` / `LIMITES LATERALES` (English/French)
 - `AREA`
 - `WI COORD`
 
@@ -44,6 +60,8 @@ Areas are detected when the E) section contains multiple coordinates (3+) that d
 **Dash-connected coordinates:**
 - 4+ coordinates connected by dashes, forming an area boundary
 
+Self-intersecting polygons are detected and automatically fixed. Polygons crossing the antimeridian are handled correctly. A single NOTAM may contain multiple areas, which are split into separate entries.
+
 Example:
 ```
 E) TEMPORARY SEGREGATED AREA ACTIVATED WI 422726N 0064355W,
@@ -52,9 +70,9 @@ E) TEMPORARY SEGREGATED AREA ACTIVATED WI 422726N 0064355W,
 415951N 0060938W, 422726N 0064355W
 ```
 
-### 3. Qualifier line coordinates (blue markers)
+#### 3. Qualifier line coordinates (blue markers)
 
-Coordinates from the Q) line (e.g., 4845N00207E005), which includes a radius in nautical miles. These are shown only when no coordinates are found in the E) section and "Show all NOTAMs" is enabled.
+Coordinates from the Q) line (format: `DDMMN DDDMME RRR`, e.g., `4845N00207E005`), which includes a radius in nautical miles. These are shown only when no coordinates are found in the E) section and "Show all NOTAMs" is enabled.
 
 ## Demo
 
