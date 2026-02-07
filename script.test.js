@@ -395,12 +395,12 @@ describe('parseNotams - areas', () => {
 	const notams = parseNotams(areasText);
 
 	it('should parse all area NOTAMs', () => {
-		assert.equal(notams.length, 15);
+		assert.equal(notams.length, 16);
 	});
 
 	it('should mark area NOTAMs as polygons', () => {
 		const polygons = notams.filter(n => n.isPolygon);
-		assert.equal(polygons.length, 14);
+		assert.equal(polygons.length, 15);
 	});
 
 	it('should parse LIMITES LATERALES keyword (LFFA-R2339/25)', () => {
@@ -498,6 +498,22 @@ describe('parseNotams - areas', () => {
 		assert.equal(entries[0].coordinates.length, 10);
 		assertNear(entries[0].coordinates[0].lat, 23.7519, 'first lat');
 		assertNear(entries[0].coordinates[0].lon, 79.7553, 'first lon');
+	});
+
+	it('should normalize antimeridian-crossing polygon (KZAK-A0546/26)', () => {
+		const n = findNotam(notams, 'KZAK-A0546/26');
+		assert.ok(n);
+		assert.equal(n.isPolygon, true);
+		assert.equal(n.coordinates.length, 10);
+		// First coordinate: ~36.73°N, ~163.07°W
+		assertNear(n.coordinates[0].lat, 36.7333, 'first lat');
+		assertNear(n.coordinates[0].lon, -163.0667, 'first lon');
+		// All consecutive longitude differences should be <= 180°
+		for (let i = 1; i < n.coordinates.length; i++) {
+			const diff = Math.abs(n.coordinates[i].lon - n.coordinates[i - 1].lon);
+			assert.ok(diff <= 180,
+				`longitude jump between vertex ${i - 1} and ${i} is ${diff}°, expected <= 180°`);
+		}
 	});
 
 	it('should make simple polygon from self-intersecting coords (EBBR-F0162/26)', () => {

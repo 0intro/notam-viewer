@@ -548,10 +548,15 @@ function parseNotams(text) {
 				isPolygon = hasAreaKeywords || hasClosingCoord || (hasDashConnectedCoords && groupCoords.length >= 4) || isClosed;
 			}
 
+			const finalCoords = isPolygon && isSelfIntersecting(groupCoords)
+				? makeSimplePolygon(groupCoords) : groupCoords;
+			if (isPolygon) {
+				normalizePolygonLongitudes(finalCoords);
+			}
 			notams.push({
 				id: notamId,
 				fullContent: cleanNotamContent(content),
-				coordinates: isPolygon && isSelfIntersecting(groupCoords) ? makeSimplePolygon(groupCoords) : groupCoords,
+				coordinates: finalCoords,
 				icaoCodes: icaoCodes,
 				isPolygon: isPolygon,
 				startDate: dates.start,
@@ -622,6 +627,19 @@ function computePolygonArea(coordinates) {
 		area -= coordinates[j].lat * coordinates[i].lon;
 	}
 	return Math.abs(area) / 2;
+}
+
+// Normalize polygon longitudes so consecutive vertices never jump more than 180°.
+// This fixes rendering of polygons that cross the antimeridian (±180°).
+function normalizePolygonLongitudes(coordinates) {
+	for (let i = 1; i < coordinates.length; i++) {
+		while (coordinates[i].lon - coordinates[i - 1].lon > 180) {
+			coordinates[i].lon -= 360;
+		}
+		while (coordinates[i].lon - coordinates[i - 1].lon < -180) {
+			coordinates[i].lon += 360;
+		}
+	}
 }
 
 // Canvas renderer for circles (better compatibility with html2canvas for PDF export)
