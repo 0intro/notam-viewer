@@ -226,6 +226,7 @@ function cleanNotamContent(content) {
 }
 
 const areaKeywordsPattern = /\b(LIMITES?\s+LATERALES?|LATERAL\s+LIMITS?|AREA|WI\s+COORD)\b/i;
+const areaExclusionPattern = /\bRESTRICTED\s+IN\s+AREA\b/i;
 
 // Parse NOTAMs and extract those with coordinates
 function parseNotams(text) {
@@ -266,10 +267,11 @@ function parseNotams(text) {
 		if (eContent) {
 			// Check for position or area keywords
 			const hasPsnKeyword = /\bPSN\b/i.test(eContent);
-			const hasAreaKeywords = areaKeywordsPattern.test(eContent);
+			const hasCentredKeyword = /\CENTRED\s+ON\b/i.test(eContent);
+			const hasAreaKeywords = areaKeywordsPattern.test(eContent) && !areaExclusionPattern.test(eContent);
 
-			// Only extract coordinates if PSN or area keywords are present
-			if (hasPsnKeyword || hasAreaKeywords) {
+			// Only extract coordinates if PSN, CENTRED ON, or area keywords are present
+			if (hasPsnKeyword || hasCentredKeyword || hasAreaKeywords) {
 				// Find all coordinate-like patterns in the E) section
 				// Matches patterns like: 422726N 0064355W, 4227N 00643W or 455554.997N 0060439.322E
 				const coordPattern = /(\d{4,7}(?:\.\d+)?[NS])\s+(\d{5,8}(?:\.\d+)?[EW])/gi;
@@ -361,7 +363,7 @@ function parseNotams(text) {
 
 			if (groupCoords.length >= 3 && eContent) {
 				// Check for area keywords
-				const hasAreaKeywords = areaKeywordsPattern.test(eContent);
+				const hasAreaKeywords = areaKeywordsPattern.test(eContent) && !areaExclusionPattern.test(eContent);
 
 				// Check if it's a closed polygon by looking for parenthesized closing coordinate
 				// Pattern: (DDMMSSN DDDMMSSW) including various spacing and line breaks
