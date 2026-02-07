@@ -248,13 +248,12 @@ describe('parseNotams - areas', () => {
 	const notams = parseNotams(areasText);
 
 	it('should parse all area NOTAMs', () => {
-		assert.equal(notams.length, 11);
+		assert.equal(notams.length, 14);
 	});
 
-	it('should mark all area NOTAMs as polygons', () => {
-		for (const n of notams) {
-			assert.equal(n.isPolygon, true, `${n.id} should be polygon`);
-		}
+	it('should mark area NOTAMs as polygons', () => {
+		const polygons = notams.filter(n => n.isPolygon);
+		assert.equal(polygons.length, 13);
 	});
 
 	it('should parse LIMITES LATERALES keyword (LFFA-R2339/25)', () => {
@@ -342,5 +341,32 @@ describe('parseNotams - areas', () => {
 		assert.equal(entries[1].coordinates.length, 6);
 		assertNear(entries[1].coordinates[0].lat, 70.9333, 'second area lat');
 		assertNear(entries[1].coordinates[0].lon, 32.0833, 'second area lon');
+	});
+
+	it('should separate PSN before area keyword from polygon (VABB-A0190/26)', () => {
+		const entries = notams.filter(n => n.id === 'VABB-A0190/26');
+		// Only the polygon; parenthesized coordinate without PSN is ignored
+		assert.equal(entries.length, 1);
+		assert.equal(entries[0].isPolygon, true);
+		assert.equal(entries[0].coordinates.length, 10);
+		assertNear(entries[0].coordinates[0].lat, 23.7519, 'first lat');
+		assertNear(entries[0].coordinates[0].lon, 79.7553, 'first lon');
+	});
+
+	it('should ignore parenthesized coordinate without PSN keyword (VABB-A0190/26 variant)', () => {
+		const entries = notams.filter(n => n.id === 'VABB-A0191/26');
+		assert.equal(entries.length, 2);
+
+		// First entry: standalone PSN (Chhindwara airport)
+		assert.equal(entries[0].isPolygon, false);
+		assert.equal(entries[0].coordinates.length, 1);
+		assertNear(entries[0].coordinates[0].lat, 22.0024, 'psn lat');
+		assertNear(entries[0].coordinates[0].lon, 78.9174, 'psn lon');
+
+		// Second entry: polygon area (10 unique vertices)
+		assert.equal(entries[1].isPolygon, true);
+		assert.equal(entries[1].coordinates.length, 10);
+		assertNear(entries[1].coordinates[0].lat, 23.7519, 'first lat');
+		assertNear(entries[1].coordinates[0].lon, 79.7553, 'first lon');
 	});
 });
