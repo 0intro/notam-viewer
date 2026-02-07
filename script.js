@@ -295,6 +295,52 @@ const lateralLimitsTranslations = [
 const areaKeywordsPattern = new RegExp('\\b(' + lateralLimitsTranslations.join('|') + '|AREA|WI\\s+COORD)\\b', 'i');
 const areaExclusionPattern = /\bRESTRICTED\s+IN\s+AREA\b/i;
 
+// Extract radius info from text surrounding a coordinate match in the E) section
+function extractRadiusFromText(eContent, matchStart, matchEnd) {
+	// Look after the coordinate: "RADIUS <num><unit>"
+	const afterText = eContent.substring(matchEnd, matchEnd + 50);
+	const afterMatch = afterText.match(/^\s+RADIUS\s+(\d+(?:[.,]\d+)?)\s*(NM|KM|M)\b/i);
+	if (afterMatch) {
+		return {
+			radius: parseFloat(afterMatch[1].replace(',', '.')),
+			radiusUnit: afterMatch[2].toUpperCase()
+		};
+	}
+
+	// Look before the coordinate (up to 50 chars)
+	const beforeText = eContent.substring(Math.max(0, matchStart - 50), matchStart);
+
+	// "<num><unit> RADIUS [OF|CENTRED ON/AT]"
+	const beforeMatch1 = beforeText.match(/(\d+(?:[.,]\d+)?)\s*(NM|KM|M)\s+RADIUS\b/i);
+	if (beforeMatch1) {
+		return {
+			radius: parseFloat(beforeMatch1[1].replace(',', '.')),
+			radiusUnit: beforeMatch1[2].toUpperCase()
+		};
+	}
+
+	// "RADIUS <num><unit> [CENTRE/CENTRED/CENTER/CENTERED ON/AT]"
+	const beforeMatch2 = beforeText.match(/\bRADIUS\s+(\d+(?:[.,]\d+)?)\s*(NM|KM|M)\b/i);
+	if (beforeMatch2) {
+		return {
+			radius: parseFloat(beforeMatch2[1].replace(',', '.')),
+			radiusUnit: beforeMatch2[2].toUpperCase()
+		};
+	}
+
+	return null;
+}
+
+// Convert radius to nautical miles
+function radiusToNM(radius, unit) {
+	if (unit === 'KM') return radius / 1.852;
+	if (unit === 'M') return radius / 1852;
+	return radius; // NM or default
+}
+
+// Display unit with correct casing (SI: m, km; aviation: NM)
+const radiusUnitDisplay = { NM: 'NM', KM: 'km', M: 'm' };
+
 // Parse NOTAM content into ICAO sections (Q, A, B, C, D, E, F, G)
 function parseSections(content) {
 	const sections = {};
@@ -424,12 +470,18 @@ function parseNotams(text) {
 						!/^\s*-\s*\d{4,7}/i.test(after);
 
 					if (isStandalonePsn) {
-						coordinateGroups.push([{
+						const radiusInfo = extractRadiusFromText(eContent, match.index, match.index + match[0].length);
+						const coord = {
 							original: coordStr.trim(),
 							lat: coords.lat,
 							lon: coords.lon,
 							type: 'psn'
-						}]);
+						};
+						if (radiusInfo) {
+							coord.radius = radiusInfo.radius;
+							coord.radiusUnit = radiusInfo.radiusUnit;
+						}
+						coordinateGroups.push([coord]);
 						continue;
 					}
 
@@ -461,12 +513,18 @@ function parseNotams(text) {
 					} else {
 						groupClosed = false;
 						seenPositions.add(posKey);
-						coordinates.push({
+						const radiusInfo = extractRadiusFromText(eContent, match.index, match.index + match[0].length);
+						const coord = {
 							original: coordStr.trim(),
 							lat: coords.lat,
 							lon: coords.lon,
 							type: 'psn'
-						});
+						};
+						if (radiusInfo) {
+							coord.radius = radiusInfo.radius;
+							coord.radiusUnit = radiusInfo.radiusUnit;
+						}
+						coordinates.push(coord);
 					}
 				}
 			}
@@ -622,16 +680,17 @@ const polygonHighlightStyle = {
 };
 
 // Show radius circle for a location (radius in NM)
-function showRadiusCircle(lat, lon, radiusNM) {
+function showRadiusCircle(lat, lon, radiusNM, color) {
 	if (radiusCircle) {
 		map.removeLayer(radiusCircle);
 	}
 	// Convert NM to meters (1 NM = 1852 m)
 	const radiusMeters = radiusNM * 1852;
+	const circleColor = color || '#0078d4';
 	radiusCircle = L.circle([lat, lon], {
 		radius: radiusMeters,
-		color: '#0078d4',
-		fillColor: '#0078d4',
+		color: circleColor,
+		fillColor: circleColor,
 		fillOpacity: 0.15,
 		weight: 2,
 		renderer: canvasRenderer
@@ -684,11 +743,18 @@ function groupNotamsByLocation(notams, showAll) {
 				id: notam.id,
 				fullContent: notam.fullContent,
 				type: coord.type,
-				radius: coord.radius
+				radius: coord.radius,
+				radiusUnit: coord.radiusUnit
 			});
 			if (coord.type === 'qualifierLine') {
 				group.hasQualifierLine = true;
-				if (coord.radius) group.radius = coord.radius;
+				if (coord.radius) {
+					group.radius = coord.radius;
+					group.radiusUnit = 'NM';
+				}
+			} else if (coord.radius) {
+				group.radius = coord.radius;
+				group.radiusUnit = coord.radiusUnit;
 			}
 		});
 	});
@@ -729,7 +795,7 @@ function buildPopupHtml(group, navInfo) {
 	const countBadge = `<span class="popup-count">${notamCount} NOTAM${notamCount > 1 ? 's' : ''}</span>`;
 
 	const radiusInfo = group.radius
-		? `<div class="popup-radius">Radius: ${group.radius} NM</div>`
+		? `<div class="popup-radius">Radius: ${group.radius} ${radiusUnitDisplay[group.radiusUnit] || 'NM'}</div>`
 		: '';
 
 	const notamsList = group.notams.map(n => `
@@ -766,8 +832,11 @@ function buildListItemHtml(group, posIndex) {
 
 	// Show DMS position for PSN NOTAMs
 	const isPsnNotam = group.notams.some(n => n.type === 'psn');
+	const radiusSuffix = group.radius && isPsnNotam
+		? ` with radius ${group.radius} ${radiusUnitDisplay[group.radiusUnit] || 'NM'}`
+		: '';
 	const positionLabel = isPsnNotam
-		? `<span class="notam-position">Position (${formatDMS(group.lat, group.lon)})</span>`
+		? `<span class="notam-position">Position (${formatDMS(group.lat, group.lon)})${radiusSuffix}</span>`
 		: '';
 
 	return `
@@ -793,8 +862,10 @@ function setupMarkerEvents(marker, group, navInfo, markerMap) {
 	const { groupIndex, totalAtLocation, hasMultipleAtLocation, groupsAtLocation } = navInfo;
 
 	marker.on('popupopen', () => {
-		if (group.hasQualifierLine && group.radius) {
-			showRadiusCircle(group.lat, group.lon, group.radius);
+		if (group.radius) {
+			const nm = radiusToNM(group.radius, group.radiusUnit || 'NM');
+			const color = group.hasQualifierLine ? '#0078d4' : '#ff7800';
+			showRadiusCircle(group.lat, group.lon, nm, color);
 		}
 
 		if (hasMultipleAtLocation) {

@@ -37,7 +37,8 @@ const code = readFileSync(new URL('./script.js', import.meta.url), 'utf-8');
 new Script(code).runInContext(context);
 
 const { parseNotams, parseDMSCoordinate, parseQualifierLine,
-	parseNotamDates, parseSections, computePolygonArea } = context;
+	parseNotamDates, parseSections, computePolygonArea,
+	extractRadiusFromText, radiusToNM } = context;
 
 function findNotam(notams, id) {
 	return notams.find(n => n.id === id);
@@ -197,13 +198,68 @@ describe('computePolygonArea', () => {
 	});
 });
 
+// Unit tests for radius extraction
+
+describe('extractRadiusFromText', () => {
+	it('should extract RADIUS after coordinates', () => {
+		const text = 'PSN 514600N 0052622E RADIUS 1NM BTN GND/500FT';
+		// "514600N 0052622E" starts at 4, length 16
+		const r = extractRadiusFromText(text, 4, 20);
+		assert.equal(r.radius, 1);
+		assert.equal(r.radiusUnit, 'NM');
+	});
+
+	it('should extract decimal RADIUS after coordinates', () => {
+		const text = 'PSN 513613N 0055239E RADIUS 1.5NM BTN GND';
+		const r = extractRadiusFromText(text, 4, 20);
+		assert.equal(r.radius, 1.5);
+		assert.equal(r.radiusUnit, 'NM');
+	});
+
+	it('should extract RADIUS with comma decimal (KM) before coordinates', () => {
+		const text = 'CIRCLE RADIUS 5,6KM CENTRED ON 482406N 0170711E';
+		// "482406N 0170711E" starts at 31, length 16
+		const r = extractRadiusFromText(text, 31, 47);
+		assert.equal(r.radius, 5.6);
+		assert.equal(r.radiusUnit, 'KM');
+	});
+
+	it('should extract M RADIUS OF before coordinates', () => {
+		const text = 'UNMANNED ACFT VEHICLE FLYING WI 1000M RADIUS OF 414056N 0044930W';
+		// "414056N 0044930W" starts at 49, length 16
+		const r = extractRadiusFromText(text, 49, 65);
+		assert.equal(r.radius, 1000);
+		assert.equal(r.radiusUnit, 'M');
+	});
+
+	it('should return null when no radius present', () => {
+		const text = 'PSN 484024N 0030441E RDL 031/5.4NM ARP LFAI';
+		const r = extractRadiusFromText(text, 4, 20);
+		assert.equal(r, null);
+	});
+});
+
+describe('radiusToNM', () => {
+	it('should return NM as-is', () => {
+		assert.equal(radiusToNM(5, 'NM'), 5);
+	});
+
+	it('should convert KM to NM', () => {
+		assertNear(radiusToNM(1.852, 'KM'), 1.0, 'km');
+	});
+
+	it('should convert M to NM', () => {
+		assertNear(radiusToNM(1852, 'M'), 1.0, 'm');
+	});
+});
+
 // Integration tests: positions
 
 describe('parseNotams - positions', () => {
 	const notams = parseNotams(positionsText);
 
 	it('should parse all position NOTAMs', () => {
-		assert.equal(notams.length, 10);
+		assert.equal(notams.length, 12);
 	});
 
 	it('should not mark any position NOTAM as polygon', () => {
@@ -268,6 +324,37 @@ describe('parseNotams - positions', () => {
 		assertNear(n.coordinates[1].lon, 19.1342, 'lon 2');
 		assertNear(n.coordinates[2].lat, 49.0278, 'lat 3');
 		assertNear(n.coordinates[2].lon, 21.3031, 'lon 3');
+	});
+
+	it('should extract radius for circle centres (LZIB-A2755/25)', () => {
+		const n = findNotam(notams, 'LZIB-A2755/25');
+		assert.ok(n);
+		for (let i = 0; i < 3; i++) {
+			assert.equal(n.coordinates[i].radius, 5.6, `coord ${i} radius`);
+			assert.equal(n.coordinates[i].radiusUnit, 'KM', `coord ${i} unit`);
+		}
+	});
+
+	it('should parse PSN with RADIUS in NM after coordinates (EHAA-A0456/26)', () => {
+		const n = findNotam(notams, 'EHAA-A0456/26');
+		assert.ok(n);
+		assert.equal(n.coordinates.length, 1);
+		assert.equal(n.coordinates[0].type, 'psn');
+		assertNear(n.coordinates[0].lat, 51.7667, 'lat');
+		assertNear(n.coordinates[0].lon, 5.4394, 'lon');
+		assert.equal(n.coordinates[0].radius, 1);
+		assert.equal(n.coordinates[0].radiusUnit, 'NM');
+	});
+
+	it('should parse M RADIUS OF PSN before coordinates (LEAN-R0300/26)', () => {
+		const n = findNotam(notams, 'LEAN-R0300/26');
+		assert.ok(n);
+		assert.equal(n.coordinates.length, 1);
+		assert.equal(n.coordinates[0].type, 'psn');
+		assertNear(n.coordinates[0].lat, 40.8864, 'lat');
+		assertNear(n.coordinates[0].lon, 16.035, 'lon');
+		assert.equal(n.coordinates[0].radius, 500);
+		assert.equal(n.coordinates[0].radiusUnit, 'M');
 	});
 
 	it('should parse high-precision decimal seconds (LFFA-P4304/25)', () => {
