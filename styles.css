@@ -190,10 +190,6 @@ button:hover {
 	background: #b8daff;
 }
 
-.print-btn {
-	margin-right: 8px;
-}
-
 .map-buttons {
 	display: flex;
 	gap: 8px;
@@ -287,11 +283,6 @@ button:hover {
 .coord-label {
 	font-weight: bold;
 	color: #0078d4;
-}
-
-.coord-decimal {
-	color: #666;
-	margin-left: 10px;
 }
 
 .notam-content {
@@ -448,14 +439,7 @@ button:hover {
 	font-weight: bold;
 }
 
-.notam-position {
-	color: #666;
-	font-size: 11px;
-	font-weight: normal;
-	margin-left: 8px;
-	margin-right: 8px;
-}
-
+.notam-position,
 .notam-area {
 	color: #666;
 	font-size: 11px;
@@ -514,14 +498,6 @@ footer a:hover {
 
 .license-content p {
 	margin-bottom: 15px;
-}
-
-.license-content .disclaimer {
-	background: #f8f9fa;
-	padding: 15px;
-	border-radius: 4px;
-	font-size: 0.9rem;
-	color: #555;
 }
 
 .back-link {
