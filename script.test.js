@@ -160,6 +160,12 @@ describe('parseDMSCoordinate', () => {
 		assertNear(c.lon, 14.3392, 'lon');
 	});
 
+	it('should parse 7-digit longitude as DDDMMSS with 6-digit latitude', () => {
+		const c = parseDMSCoordinate('504940N 1211510W');
+		assertNear(c.lat, 50.8278, 'lat');
+		assertNear(c.lon, -121.2528, 'lon');
+	});
+
 	it('should parse decimal seconds', () => {
 		const c = parseDMSCoordinate('483923.17N 0035848.18E');
 		assertNear(c.lat, 48.6564, 'lat');
@@ -437,10 +443,11 @@ describe('parseNotams - areas', () => {
 // Integration tests: statistics
 
 const statisticsTests = [
-	{ file: 'Europe-20260203.txt', all: 10424, noPosition: 7666, positions: 1777, areas: 981 },
-	{ file: 'LPPT-EPWA-20260207.txt', all: 974, noPosition: 555, positions: 304, areas: 115 },
-	{ file: 'EGPD-LFKC-20260207.txt', all: 639, noPosition: 350, positions: 249, areas: 40 },
+	{ file: 'Europe-20260203.txt', all: 10424, noPosition: 7429, positions: 2009, areas: 986 },
+	{ file: 'LPPT-EPWA-20260207.txt', all: 974, noPosition: 410, positions: 447, areas: 117 },
+	{ file: 'EGPD-LFKC-20260207.txt', all: 639, noPosition: 237, positions: 361, areas: 41 },
 	{ file: 'KJFK-KLAX-20260209.txt', all: 449, noPosition: 355, positions: 93, areas: 1 },
+	{ file: 'CYQB-CYVR-20260209.txt', all: 366, noPosition: 123, positions: 241, areas: 2 },
 ];
 
 for (const t of statisticsTests) {
