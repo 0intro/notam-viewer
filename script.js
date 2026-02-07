@@ -282,7 +282,12 @@ function cleanNotamContent(content) {
 		.join('\n');
 }
 
-const areaKeywordsPattern = /\b(LIMITES?\s+LATERALES?|LATERAL\s+LIMITS?|AREA|WI\s+COORD)\b/i;
+const lateralLimitsTranslations = [
+	'LATERAL\\s+LIMITS?',    // English
+	'LIMITES?\\s+LATERALES?', // French
+	'GRANICE\\s+POZIOME',    // Polish
+];
+const areaKeywordsPattern = new RegExp('\\b(' + lateralLimitsTranslations.join('|') + '|AREA|WI\\s+COORD)\\b', 'i');
 const areaExclusionPattern = /\bRESTRICTED\s+IN\s+AREA\b/i;
 
 // Parse NOTAM content into ICAO sections (Q, A, B, C, D, E, F, G)
