@@ -107,6 +107,60 @@ function formatDMS(lat, lon) {
 	return `${latDeg}°${latMin.toString().padStart(2, '0')}'${latSec.padStart(4, '0')}"${latDir} / ${lonDeg.toString().padStart(3, '0')}°${lonMin.toString().padStart(2, '0')}'${lonSec.padStart(4, '0')}"${lonDir}`;
 }
 
+// Parse NOTAM validity dates from B)/C) sections or SOFIA-Briefing DU/AU line
+// B)/C) format: 2026-02-24 00:00
+// DU/AU format: DU: 29 12 2025 16:06 AU: 30 06 2026 23:59 EST
+function parseNotamDates(sections, content) {
+	let start = null;
+	let end = null;
+	let permanent = false;
+	let estimated = false;
+
+	// Try B) and C) sections first (ICAO format: YYYY-MM-DD HH:MM)
+	if (sections.B) {
+		const m = sections.B.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);
+		if (m) {
+			start = new Date(Date.UTC(+m[1], m[2] - 1, +m[3], +m[4], +m[5]));
+		}
+	}
+	if (sections.C) {
+		if (/\bPERM\b/i.test(sections.C)) {
+			permanent = true;
+		} else {
+			const cStr = sections.C.replace(/\s*\bEST\b/i, '');
+			if (cStr !== sections.C) estimated = true;
+			const m = cStr.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);
+			if (m) {
+				end = new Date(Date.UTC(+m[1], m[2] - 1, +m[3], +m[4], +m[5]));
+			}
+		}
+	}
+
+	// Fall back to SOFIA-Briefing DU/AU line (format: DD MM YYYY HH:MM)
+	if (!start && !end && !permanent) {
+		const duMatch = content.match(/DU:\s*(\d{2})\s+(\d{2})\s+(\d{4})\s+(\d{2}):(\d{2})/);
+		if (duMatch) {
+			start = new Date(Date.UTC(+duMatch[3], duMatch[2] - 1, +duMatch[1], +duMatch[4], +duMatch[5]));
+		}
+
+		const auMatch = content.match(/AU:\s*(.*?)(?:\n|$)/);
+		if (auMatch) {
+			const auStr = auMatch[1].trim();
+			if (/\bPERM\b/i.test(auStr)) {
+				permanent = true;
+			} else {
+				if (/\bEST\b/i.test(auStr)) estimated = true;
+				const m = auStr.match(/(\d{2})\s+(\d{2})\s+(\d{4})\s+(\d{2}):(\d{2})/);
+				if (m) {
+					end = new Date(Date.UTC(+m[3], m[2] - 1, +m[1], +m[4], +m[5]));
+				}
+			}
+		}
+	}
+
+	return { start, end, permanent, estimated };
+}
+
 // Parse Q) section content into a structured qualifier line object
 // Format: FIR / CODE / TRAFFIC / PURPOSE / SCOPE / LOWER/UPPER / COORDINATES
 // Example: LFFF / QWULW / IV / BO / W / 000/014 / 4840N00305E005
@@ -287,6 +341,7 @@ function parseNotams(text) {
 		const coordinates = [];
 		const seenPositions = new Set(); // Track positions to deduplicate
 
+		const dates = parseNotamDates(sections, content);
 		const eContent = sections.E || null;
 
 		const coordinateGroups = [];
@@ -446,7 +501,11 @@ function parseNotams(text) {
 				fullContent: cleanNotamContent(content),
 				coordinates: isPolygon && isSelfIntersecting(groupCoords) ? makeSimplePolygon(groupCoords) : groupCoords,
 				icaoCodes: icaoCodes,
-				isPolygon: isPolygon
+				isPolygon: isPolygon,
+				startDate: dates.start,
+				endDate: dates.end,
+				permanent: dates.permanent,
+				estimated: dates.estimated
 			});
 		}
 	}

@@ -37,7 +37,7 @@ const code = readFileSync(new URL('./script.js', import.meta.url), 'utf-8');
 new Script(code).runInContext(context);
 
 const { parseNotams, parseDMSCoordinate, parseQualifierLine,
-	computePolygonArea } = context;
+	parseNotamDates, parseSections, computePolygonArea } = context;
 
 function findNotam(notams, id) {
 	return notams.find(n => n.id === id);
@@ -88,6 +88,48 @@ describe('parseQualifierLine', () => {
 		assertNear(q.lat, 16.25, 'lat');
 		assertNear(q.lon, -61.2667, 'lon');
 		assert.equal(q.radius, 1);
+	});
+});
+
+// Unit tests for NOTAM date parser
+
+describe('parseNotamDates', () => {
+	it('should parse ICAO B/C dates', () => {
+		const content = 'Q) LFFF / QRTCA / IV / BO / W / 000/195 / 4940N00135W007\nA) LFRC\nB) 2026-02-24 00:00 C) 2026-03-11 23:59\nE) TEST';
+		const sections = parseSections(content);
+		const d = parseNotamDates(sections, content);
+		assert.equal(d.start.getTime(), Date.UTC(2026, 1, 24, 0, 0));
+		assert.equal(d.end.getTime(), Date.UTC(2026, 2, 11, 23, 59));
+		assert.equal(d.permanent, false);
+		assert.equal(d.estimated, false);
+	});
+
+	it('should parse SOFIA DU/AU dates', () => {
+		const content = 'DU: 20 01 2025 07:32 AU: 30 04 2026 19:02\nA) LFFF\nQ) LFFF / QWULW / IV / BO / W / 000/014 / 4840N00305E005\nE) TEST';
+		const sections = parseSections(content);
+		const d = parseNotamDates(sections, content);
+		assert.equal(d.start.getTime(), Date.UTC(2025, 0, 20, 7, 32));
+		assert.equal(d.end.getTime(), Date.UTC(2026, 3, 30, 19, 2));
+		assert.equal(d.permanent, false);
+		assert.equal(d.estimated, false);
+	});
+
+	it('should parse SOFIA AU: PERM', () => {
+		const content = 'DU: 23 10 2025 11:46 AU: PERM\nA) LFFF\nQ) LFFF / QOBCE / IV / M / E / 000/011 / 4839N00359E001\nE) TEST';
+		const sections = parseSections(content);
+		const d = parseNotamDates(sections, content);
+		assert.equal(d.start.getTime(), Date.UTC(2025, 9, 23, 11, 46));
+		assert.equal(d.end, null);
+		assert.equal(d.permanent, true);
+	});
+
+	it('should parse SOFIA AU with EST suffix', () => {
+		const content = 'DU: 29 12 2025 16:06 AU: 30 06 2026 23:59 EST\nA) LPPT\nQ) LPPC / QFAHW / IV / BO / A / 000/999 / 3846N00908W005\nE) TEST';
+		const sections = parseSections(content);
+		const d = parseNotamDates(sections, content);
+		assert.equal(d.start.getTime(), Date.UTC(2025, 11, 29, 16, 6));
+		assert.equal(d.end.getTime(), Date.UTC(2026, 5, 30, 23, 59));
+		assert.equal(d.estimated, true);
 	});
 });
 
