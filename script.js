@@ -256,8 +256,9 @@ function parseNotams(text) {
 		const coordinates = [];
 		const seenPositions = new Set(); // Track positions to deduplicate
 
-		// Extract E) section content
-		const eSectionMatch = content.match(/E\)([\s\S]+?)(?=[A-Z]\)|$)/i);
+		// Extract E) section content (require newline before next section marker
+		// to avoid false matches on words like FLASH) or NORTH))
+		const eSectionMatch = content.match(/E\)([\s\S]+?)(?=\n[A-Z]\)|$)/i);
 		const eContent = eSectionMatch ? eSectionMatch[1] : null;
 
 		if (eContent) {
