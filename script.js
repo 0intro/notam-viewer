@@ -355,10 +355,11 @@ function parseNotams(text) {
 			// Check for position or area keywords
 			const hasPsnKeyword = /\bPSN\b/i.test(eContent);
 			const hasCentredKeyword = /\CENTRED\s+ON\b/i.test(eContent);
+			const hasObstKeyword = /\bOBST\b/i.test(eContent);
 			const hasAreaKeywords = areaKeywordsPattern.test(eContent) && !areaExclusionPattern.test(eContent);
 
-			// Only extract coordinates if PSN, CENTRED ON, or area keywords are present
-			if (hasPsnKeyword || hasCentredKeyword || hasAreaKeywords) {
+			// Only extract coordinates if PSN, CENTRED ON, OBST, or area keywords are present
+			if (hasPsnKeyword || hasCentredKeyword || hasObstKeyword || hasAreaKeywords) {
 				// When area keywords are present, find the first keyword
 				// directly followed by coordinates; non-PSN coordinates
 				// before it are skipped
@@ -368,7 +369,7 @@ function parseNotams(text) {
 					let areaMatch;
 					while ((areaMatch = areaSearchPattern.exec(eContent)) !== null) {
 						const after = eContent.substring(areaMatch.index + areaMatch[0].length);
-						if (/^.{0,40}?\d{4,7}(?:\.\d+)?[NS]\s+\d{5,8}(?:\.\d+)?[EW]/is.test(after)) {
+						if (/^.{0,40}?(?:\d{4,7}(?:\.\d+)?[NS]\s+\d{5,8}(?:\.\d+)?[EW]|\d{6}[NS]\d{7}[EW])/is.test(after)) {
 							extractionStartIndex = areaMatch.index;
 							break;
 						}
@@ -377,7 +378,7 @@ function parseNotams(text) {
 
 				// Find all coordinate-like patterns in the E) section
 				// Matches patterns like: 422726N 0064355W, 4227N 00643W or 455554.997N 0060439.322E
-				const coordPattern = /(\d{4,7}(?:\.\d+)?[NS])\s+(\d{5,8}(?:\.\d+)?[EW])/gi;
+				const coordPattern = /(\d{4,7}(?:\.\d+)?[NS])\s+(\d{5,8}(?:\.\d+)?[EW])|(\d{6})([NS])(\d{7})([EW])/gi;
 				let match;
 				let groupClosed = false;
 				// Coarse positions (~111m) from closed groups, used to skip
@@ -385,8 +386,28 @@ function parseNotams(text) {
 				const closedGroupPositions = new Set();
 
 				while ((match = coordPattern.exec(eContent)) !== null) {
-					const coordStr = match[1] + ' ' + match[2];
-					const coords = parseDMSCoordinate(coordStr);
+					let coordStr, coords;
+					if (match[1]) {
+						// Spaced format: use existing parser
+						coordStr = match[1] + ' ' + match[2];
+						coords = parseDMSCoordinate(coordStr);
+					} else {
+						// Spaceless format: DDMMSS[NS]DDDMMSS[EW]
+						coordStr = match[3] + match[4] + match[5] + match[6];
+						const latStr = match[3], latDir = match[4];
+						const lonStr = match[5], lonDir = match[6];
+						const latD = parseInt(latStr.substring(0, 2), 10);
+						const latM = parseInt(latStr.substring(2, 4), 10);
+						const latS = parseInt(latStr.substring(4, 6), 10);
+						const lonD = parseInt(lonStr.substring(0, 3), 10);
+						const lonM = parseInt(lonStr.substring(3, 5), 10);
+						const lonS = parseInt(lonStr.substring(5, 7), 10);
+						let lat = latD + latM / 60 + latS / 3600;
+						let lon = lonD + lonM / 60 + lonS / 3600;
+						if (latDir === 'S') lat = -lat;
+						if (lonDir === 'W') lon = -lon;
+						coords = { lat, lon };
+					}
 					if (!coords) continue;
 
 					// A standalone PSN has the keyword nearby but is not
