@@ -142,7 +142,7 @@ describe('parseNotams - positions', () => {
 	const notams = parseNotams(positionsText);
 
 	it('should parse all position NOTAMs', () => {
-		assert.equal(notams.length, 9);
+		assert.equal(notams.length, 10);
 	});
 
 	it('should not mark any position NOTAM as polygon', () => {
@@ -194,6 +194,20 @@ describe('parseNotams - positions', () => {
 		assert.equal(n.coordinates[0].type, 'psn');
 		assertNear(n.coordinates[0].lat, 46.6469, 'lat');
 		assertNear(n.coordinates[0].lon, 14.3392, 'lon');
+	});
+
+	it('should parse circle centres as distinct positions, not polygon (LZIB-A2755/25)', () => {
+		const n = findNotam(notams, 'LZIB-A2755/25');
+		assert.ok(n);
+		assert.equal(n.isPolygon, false);
+		assert.equal(n.coordinates.length, 3);
+		assert.equal(n.coordinates[0].type, 'psn');
+		assertNear(n.coordinates[0].lat, 48.4017, 'lat 1');
+		assertNear(n.coordinates[0].lon, 17.1197, 'lon 1');
+		assertNear(n.coordinates[1].lat, 48.6372, 'lat 2');
+		assertNear(n.coordinates[1].lon, 19.1342, 'lon 2');
+		assertNear(n.coordinates[2].lat, 49.0278, 'lat 3');
+		assertNear(n.coordinates[2].lon, 21.3031, 'lon 3');
 	});
 
 	it('should parse high-precision decimal seconds (LFFA-P4304/25)', () => {
