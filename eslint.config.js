@@ -11,8 +11,7 @@ export default [
 			globals: {
 				...globals.browser,
 				L: 'readonly',
-				html2canvas: 'readonly',
-				jsPDF: 'readonly'
+				html2canvas: 'readonly'
 			}
 		},
 		rules: {
