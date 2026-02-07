@@ -83,6 +83,7 @@ const blueIcon = L.icon({
 
 let markers = [];
 let radiusCircle = null; // Current radius circle on map
+let polygons = []; // Polygons for area NOTAMs
 
 // Format decimal degrees to DMS (Degrees Minutes Seconds) format
 // Example: 46.6468611, 14.3392 -> "46°38'48.7"N / 014°20'21.1"E"
@@ -224,6 +225,8 @@ function cleanNotamContent(content) {
 		.join('\n');
 }
 
+const areaKeywordsPattern = /\b(LIMITES?\s+LATERALES?|LATERAL\s+LIMITS?|AREA|WI\s+COORD)\b/i;
+
 // Parse NOTAMs and extract those with coordinates
 function parseNotams(text) {
 	const notams = [];
@@ -246,39 +249,44 @@ function parseNotams(text) {
 			content = content.substring(0, emptyLineMatch.index);
 		}
 
-		// Find all PSN coordinates in this NOTAM
-		// PSN can be followed by multiple coordinates on multiple lines
-		// Example: PSN 762200N 0215500E - 752400N 0244300E - 745100N 0214500E
+		// Find coordinates
 		const coordinates = [];
 		const seenPositions = new Set(); // Track positions to deduplicate
-		const psnMatches = content.matchAll(/PSN\s*:?\s*([^\n]+(?:\n(?![A-Z]\))[^\n]+)*)/gi);
 
-		for (const match of psnMatches) {
-			// Extract text after PSN, which may span multiple lines
-			let psnText = match[1];
+		// Extract E) section content
+		const eSectionMatch = content.match(/E\)([\s\S]+?)(?=[A-Z]\)|$)/i);
+		const eContent = eSectionMatch ? eSectionMatch[1] : null;
 
-			// Split on delimiters: dash, comma, or parentheses
-			// Keep coordinate pairs together by splitting on patterns between coordinates
-			const coordPairs = psnText.split(/\s*[-,()]\s*|\s*\n\s*/);
+		if (eContent) {
+			// Check for position or area keywords
+			const hasPsnKeyword = /\bPSN\b/i.test(eContent);
+			const hasAreaKeywords = areaKeywordsPattern.test(eContent);
 
-			for (const coordStr of coordPairs) {
-				const trimmed = coordStr.trim();
-				if (!trimmed) continue;
+			// Only extract coordinates if PSN or area keywords are present
+			if (hasPsnKeyword || hasAreaKeywords) {
+				// Find all coordinate-like patterns in the E) section
+				// Matches patterns like: 422726N 0064355W or 4227N 00643W
+				const coordPattern = /(\d{4,7}[NS])\s+(\d{5,8}[EW])/gi;
+				let match;
 
-				const coords = parseDMSCoordinate(trimmed);
-				if (coords) {
-					// Create position key for deduplication (rounded to ~1m precision)
-					const posKey = `${coords.lat.toFixed(6)}_${coords.lon.toFixed(6)}`;
+				while ((match = coordPattern.exec(eContent)) !== null) {
+					const coordStr = match[1] + ' ' + match[2];
+					const coords = parseDMSCoordinate(coordStr);
 
-					// Only add if we haven't seen this position before
-					if (!seenPositions.has(posKey)) {
-						seenPositions.add(posKey);
-						coordinates.push({
-							original: trimmed,
-							lat: coords.lat,
-							lon: coords.lon,
-							type: 'psn'
-						});
+					if (coords) {
+						// Create position key for deduplication (rounded to ~1m precision)
+						const posKey = `${coords.lat.toFixed(6)}_${coords.lon.toFixed(6)}`;
+
+						// Only add if we haven't seen this position before
+						if (!seenPositions.has(posKey)) {
+							seenPositions.add(posKey);
+							coordinates.push({
+								original: coordStr.trim(),
+								lat: coords.lat,
+								lon: coords.lon,
+								type: 'psn'
+							});
+						}
 					}
 				}
 			}
@@ -312,11 +320,40 @@ function parseNotams(text) {
 
 		// Only keep NOTAMs with valid coordinates
 		if (coordinates.length > 0) {
+			// Determine if this is an area/polygon
+			let isPolygon = false;
+
+			if (coordinates.length >= 3 && eContent) {
+				// Check for area keywords
+				const hasAreaKeywords = areaKeywordsPattern.test(eContent);
+
+				// Check if it's a closed polygon by looking for parenthesized closing coordinate
+				// Pattern: (DDMMSSN DDDMMSSW) including various spacing and line breaks
+				const hasClosingCoord = /\(\s*\d{4,7}\s*[NS]\s+\d{5,8}\s*[EW]\s*\)/i.test(eContent);
+
+				// Check if multiple coordinates are connected by dashes (typical area pattern)
+				const hasDashConnectedCoords = /\d{4,7}[NS]\s+\d{5,8}[EW]\s*[-]\s*\d{4,7}[NS]\s+\d{5,8}[EW]/i.test(eContent);
+
+				// Also check if first and last coords in array are same (in case no parentheses used)
+				const firstCoord = coordinates[0];
+				const lastCoord = coordinates[coordinates.length - 1];
+				const isClosed = Math.abs(firstCoord.lat - lastCoord.lat) < 0.001 &&
+				                 Math.abs(firstCoord.lon - lastCoord.lon) < 0.001;
+
+				// Mark as polygon if:
+				// - Area keywords present
+				// - Closing coordinate in parentheses
+				// - Multiple dash-connected coordinates (area pattern)
+				// - First and last coords match
+				isPolygon = hasAreaKeywords || hasClosingCoord || (hasDashConnectedCoords && coordinates.length >= 4) || isClosed;
+			}
+
 			notams.push({
 				id: notamId,
 				fullContent: cleanNotamContent(content),
 				coordinates: coordinates,
-				icaoCodes: icaoCodes
+				icaoCodes: icaoCodes,
+				isPolygon: isPolygon
 			});
 		}
 	}
@@ -324,18 +361,46 @@ function parseNotams(text) {
 	return notams;
 }
 
-// Clear existing markers and radius circle
+// Clear existing markers, polygons and radius circle
 function clearMarkers() {
 	markers.forEach(marker => map.removeLayer(marker));
 	markers = [];
+	polygons.forEach(polygon => map.removeLayer(polygon));
+	polygons = [];
 	if (radiusCircle) {
 		map.removeLayer(radiusCircle);
 		radiusCircle = null;
 	}
 }
 
+// Compute approximate polygon area using the shoelace formula
+function computePolygonArea(coordinates) {
+	let area = 0;
+	const n = coordinates.length;
+	for (let i = 0; i < n; i++) {
+		const j = (i + 1) % n;
+		area += coordinates[i].lat * coordinates[j].lon;
+		area -= coordinates[j].lat * coordinates[i].lon;
+	}
+	return Math.abs(area) / 2;
+}
+
 // Canvas renderer for circles (better compatibility with html2canvas for PDF export)
 const canvasRenderer = L.canvas();
+
+// Polygon styles
+const polygonDefaultStyle = {
+	color: '#ff7800',
+	weight: 2,
+	fillColor: '#ff7800',
+	fillOpacity: 0.2
+};
+const polygonHighlightStyle = {
+	color: '#ff3300',
+	weight: 3,
+	fillColor: '#ff3300',
+	fillOpacity: 0.4
+};
 
 // Show radius circle for a location (radius in NM)
 function showRadiusCircle(lat, lon, radiusNM) {
@@ -372,6 +437,11 @@ function groupNotamsByLocation(notams, showAll) {
 	const locationGroups = new Map();
 
 	notams.forEach((notam) => {
+		// Skip polygon NOTAMs as they are drawn as areas, not markers
+		if (notam.isPolygon) {
+			return;
+		}
+
 		const filteredCoords = showAll
 			? notam.coordinates
 			: notam.coordinates.filter(c => c.type === 'psn');
@@ -478,7 +548,7 @@ function buildListItemHtml(group, posIndex) {
 	// Show DMS position for PSN NOTAMs
 	const isPsnNotam = group.notams.some(n => n.type === 'psn');
 	const positionLabel = isPsnNotam
-		? `<span class="notam-position">${formatDMS(group.lat, group.lon)}</span>`
+		? `<span class="notam-position">Position (${formatDMS(group.lat, group.lon)})</span>`
 		: '';
 
 	return `
@@ -534,6 +604,117 @@ function setupMarkerEvents(marker, group, navInfo, markerMap) {
 	});
 }
 
+// Group polygon NOTAMs by centroid location
+function groupPolygonsByLocation(notams) {
+	const groups = new Map();
+	notams.forEach(notam => {
+		if (!notam.isPolygon) return;
+
+		const lats = notam.coordinates.map(c => c.lat);
+		const lons = notam.coordinates.map(c => c.lon);
+		const centroidLat = lats.reduce((a, b) => a + b, 0) / lats.length;
+		const centroidLon = lons.reduce((a, b) => a + b, 0) / lons.length;
+		const centroidKey = locationKey(centroidLat, centroidLon);
+
+		if (!groups.has(centroidKey)) {
+			groups.set(centroidKey, []);
+		}
+		groups.get(centroidKey).push({ notam, centroidLat, centroidLon });
+	});
+	return groups;
+}
+
+// Build popup HTML content for a polygon NOTAM
+function buildPolygonPopupHtml(notam, navInfo) {
+	const { index, total, hasMultiple } = navInfo;
+
+	const navHtml = hasMultiple ? `
+		<div class="popup-nav">
+			<button class="popup-nav-btn popup-nav-prev" title="Previous">&larr;</button>
+			<span class="popup-nav-counter">${index + 1} / ${total}</span>
+			<button class="popup-nav-btn popup-nav-next" title="Next">&rarr;</button>
+		</div>
+	` : '';
+
+	const icaoDisplay = notam.icaoCodes.length > 0
+		? `<div class="popup-icao">${notam.icaoCodes.join(' ')}</div>`
+		: '';
+
+	return `
+		<div class="notam-popup">
+			${navHtml}
+			<div class="popup-header">
+				${icaoDisplay}
+				<div class="popup-coords">Area (${notam.coordinates.length} points)</div>
+				<span class="popup-count">1 NOTAM</span>
+			</div>
+			<div class="popup-notams-list">
+				<div class="popup-notam">
+					<strong>${notam.id}</strong>
+					<pre class="popup-content">${notam.fullContent}</pre>
+				</div>
+			</div>
+		</div>
+	`;
+}
+
+// Build list item HTML content for a polygon NOTAM
+function buildPolygonListItemHtml(notam, posIndex) {
+	const icaoDisplay = notam.icaoCodes.length > 0
+		? `<span class="list-icao">${notam.icaoCodes.join(' ')}</span>`
+		: '';
+
+	return `
+		<div class="notam-header">
+			<span class="coord-label">#${posIndex}</span>
+			${icaoDisplay}
+			<strong>${notam.id}</strong>
+			<span class="notam-area">Area (${notam.coordinates.length} points)</span>
+		</div>
+		<div class="notam-contents">
+			<div class="notam-entry">
+				<div class="notam-entry-id">${notam.id}</div>
+				<pre class="notam-content">${notam.fullContent}</pre>
+			</div>
+		</div>
+	`;
+}
+
+// Set up polygon event handlers for highlight and popup navigation
+function setupPolygonEvents(polygon, navInfo, polygonMap, centroidKey) {
+	const { index, total, hasMultiple } = navInfo;
+
+	polygon.on('popupopen', () => {
+		polygon.setStyle(polygonHighlightStyle);
+
+		if (hasMultiple) {
+			const popup = polygon.getPopup().getElement();
+			const prevBtn = popup.querySelector('.popup-nav-prev');
+			const nextBtn = popup.querySelector('.popup-nav-next');
+
+			prevBtn.onclick = () => {
+				const prevIndex = (index - 1 + total) % total;
+				const prevPolygon = polygonMap.get(`${centroidKey}_${prevIndex}`);
+				polygon.setStyle(polygonDefaultStyle);
+				polygon.closePopup();
+				prevPolygon.openPopup();
+			};
+
+			nextBtn.onclick = () => {
+				const nextIndex = (index + 1) % total;
+				const nextPolygon = polygonMap.get(`${centroidKey}_${nextIndex}`);
+				polygon.setStyle(polygonDefaultStyle);
+				polygon.closePopup();
+				nextPolygon.openPopup();
+			};
+		}
+	});
+
+	polygon.on('popupclose', () => {
+		polygon.setStyle(polygonDefaultStyle);
+	});
+}
+
 // Main function to parse and display
 function parseAndDisplay() {
 	const input = document.getElementById('notamInput').value;
@@ -549,17 +730,57 @@ function parseAndDisplay() {
 		return;
 	}
 
+	const bounds = [];
+	const markerMap = new Map();
+	const polygonMap = new Map();
+	let posIndex = 1;
+
+	// Draw polygon NOTAMs
+	const polygonGroups = groupPolygonsByLocation(notams);
+
+	polygonGroups.forEach((group, centroidKey) => {
+		// Draw in reverse order so first polygon ends up on top
+		for (let i = group.length - 1; i >= 0; i--) {
+			const { notam } = group[i];
+			const navInfo = { index: i, total: group.length, hasMultiple: group.length > 1 };
+
+			const polygon = L.polygon(notam.coordinates.map(c => [c.lat, c.lon]), {
+				...polygonDefaultStyle,
+				renderer: canvasRenderer
+			}).addTo(map);
+			polygon._area = computePolygonArea(notam.coordinates);
+
+			polygon.bindPopup(buildPolygonPopupHtml(notam, navInfo), { maxWidth: 600, maxHeight: 500 });
+			setupPolygonEvents(polygon, navInfo, polygonMap, centroidKey);
+
+			polygons.push(polygon);
+			polygonMap.set(`${centroidKey}_${i}`, polygon);
+			notam.coordinates.forEach(c => bounds.push([c.lat, c.lon]));
+
+			const li = document.createElement('li');
+			li.innerHTML = buildPolygonListItemHtml(notam, posIndex);
+			li.querySelector('.notam-header').onclick = () => {
+				map.fitBounds(polygon.getBounds(), { padding: [50, 50] });
+				polygon.openPopup();
+				document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'center' });
+			};
+			listEl.appendChild(li);
+			posIndex++;
+		}
+	});
+
+	// Bring smaller polygons to front so they are clickable over larger ones
+	polygons.sort((a, b) => b._area - a._area);
+	polygons.forEach(p => p.bringToFront());
+
 	const locationGroups = groupNotamsByLocation(notams, showAll);
 
-	if (locationGroups.size === 0) {
+	if (locationGroups.size === 0 && polygons.length === 0) {
 		listEl.innerHTML = '<li class="no-results">No NOTAMs with PSN coordinates found. Enable "Show all NOTAMs" to include qualifier line coordinates.</li>';
 		return;
 	}
 
 	const locationToGroups = buildLocationToGroupsMap(locationGroups);
-	const bounds = [];
-	const markerMap = new Map();
-	let posIndex = 1;
 
 	locationGroups.forEach((group, key) => {
 		const groupsAtLocation = locationToGroups.get(group.locationKey);
