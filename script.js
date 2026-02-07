@@ -285,7 +285,7 @@ const areaTranslations = [
 	'AREA', // English
 	'SAHA', // Turkish
 ];
-const areaKeywordsPattern = new RegExp('\\b(' + lateralLimitsTranslations.join('|') + '|' + areaTranslations.join('|') + '|WI\\s+COORD)\\b', 'i');
+const areaKeywordsPattern = new RegExp('\\b(' + lateralLimitsTranslations.join('|') + '|' + areaTranslations.join('|') + '|WI\\s+COORD|FLW\\s+COORDS)\\b', 'i');
 const areaExclusionPattern = /\bRESTRICTED\s+IN\s+AREA\b/i;
 
 // Extract radius info from text surrounding a coordinate match in the E) section

@@ -555,9 +555,9 @@ const statisticsTests = [
 	{ file: 'EGLL-FACT-20260209.txt', all: 760, noPosition: 388, positions: 325, areas: 47 },
 	{ file: 'ENGM-YSCB-20260209.txt', all: 455, noPosition: 281, positions: 82, areas: 92 },
 	{ file: 'LEMD-UHWW-20260209.txt', all: 1379, noPosition: 606, positions: 586, areas: 187 },
-	{ file: 'LSHJ-ZBAA-20260209.txt', all: 1097, noPosition: 569, positions: 423, areas: 105 },
+	{ file: 'LSHJ-ZBAA-20260209.txt', all: 1097, noPosition: 563, positions: 423, areas: 111 },
 	{ file: 'SBBE-VIDP-20260209.txt', all: 310, noPosition: 265, positions: 23, areas: 22 },
-	{ file: 'World-20260207.txt', all: 35469, noPosition: 26625, positions: 5284, areas: 3560 },
+	{ file: 'World-20260207.txt', all: 35470, noPosition: 26578, positions: 5283, areas: 3609 },
 ];
 
 for (const t of statisticsTests) {
