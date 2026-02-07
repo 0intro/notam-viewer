@@ -370,3 +370,37 @@ describe('parseNotams - areas', () => {
 		assertNear(entries[1].coordinates[0].lon, 79.7553, 'first lon');
 	});
 });
+
+// Integration tests: statistics
+
+const statisticsTests = [
+	{ file: 'Europe-20260203.txt', all: 10356, noPosition: 8551, positions: 1335, areas: 470 },
+	{ file: 'LPPT-EPWA-20260207.txt', all: 968, noPosition: 650, positions: 237, areas: 81 },
+	{ file: 'EGPD-LFKC-20260207.txt', all: 619, noPosition: 381, positions: 217, areas: 21 },
+];
+
+for (const t of statisticsTests) {
+	describe(`parseNotams - ${t.file} statistics`, () => {
+		const text = readFileSync(new URL(`./testdata/${t.file}`, import.meta.url), 'utf-8');
+		const notams = parseNotams(text);
+		const areas = notams.filter(n => n.isPolygon).length;
+		const positions = notams.filter(n => !n.isPolygon && n.coordinates.some(c => c.type === 'psn')).length;
+		const noPosition = notams.filter(n => !n.isPolygon && n.coordinates.every(c => c.type === 'qualifierLine')).length;
+
+		it('should count all NOTAMs', () => {
+			assert.equal(notams.length, t.all);
+		});
+
+		it('should count NOTAMs with no position', () => {
+			assert.equal(noPosition, t.noPosition);
+		});
+
+		it('should count position NOTAMs', () => {
+			assert.equal(positions, t.positions);
+		});
+
+		it('should count area NOTAMs', () => {
+			assert.equal(areas, t.areas);
+		});
+	});
+}
