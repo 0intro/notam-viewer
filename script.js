@@ -1,5 +1,13 @@
+// Constants
+const DEFAULT_CENTER = [48.8566, 2.3522];
+const DEFAULT_ZOOM = 6;
+const POPUP_OPTIONS = { maxWidth: 600, maxHeight: 500 };
+const FIT_BOUNDS_PADDING = { padding: [50, 50] };
+const NM_TO_METERS = 1852;
+const NM_TO_KILOMETERS = 1.852;
+
 // Initialize the map centered on France
-const map = L.map('map').setView([48.8566, 2.3522], 6);
+const map = L.map('map').setView(DEFAULT_CENTER, DEFAULT_ZOOM);
 
 // Define tile layers
 const openStreetMap = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -61,28 +69,29 @@ const baseLayers = {
 
 L.control.layers(baseLayers, null, { position: 'topright' }).addTo(map);
 
-// Red marker icon for qualifier line coordinates
-const redIcon = L.icon({
-	iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+// Shared marker icon options
+const markerIconOptions = {
 	shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
 	iconSize: [25, 41],
 	iconAnchor: [12, 41],
 	popupAnchor: [1, -34],
 	shadowSize: [41, 41]
+};
+
+// Red marker icon for qualifier line coordinates
+const redIcon = L.icon({
+	...markerIconOptions,
+	iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png'
 });
 
 // Default blue marker icon
 const blueIcon = L.icon({
-	iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
-	shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
-	iconSize: [25, 41],
-	iconAnchor: [12, 41],
-	popupAnchor: [1, -34],
-	shadowSize: [41, 41]
+	...markerIconOptions,
+	iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png'
 });
 
 let markers = [];
-let radiusCircle = null; // Current radius circle on map
+let activeRadiusCircle = null; // Current radius circle on map
 let polygons = []; // Polygons for area NOTAMs
 
 // Format decimal degrees to DMS (Degrees Minutes Seconds) format
@@ -313,8 +322,8 @@ function extractRadiusFromText(eContent, matchStart, matchEnd) {
 
 // Convert radius to nautical miles
 function radiusToNM(radius, unit) {
-	if (unit === 'KM') return radius / 1.852;
-	if (unit === 'M') return radius / 1852;
+	if (unit === 'KM') return radius / NM_TO_KILOMETERS;
+	if (unit === 'M') return radius / NM_TO_METERS;
 	return radius; // NM or default
 }
 
@@ -576,9 +585,9 @@ function clearMarkers() {
 	markers = [];
 	polygons.forEach(polygon => map.removeLayer(polygon));
 	polygons = [];
-	if (radiusCircle) {
-		map.removeLayer(radiusCircle);
-		radiusCircle = null;
+	if (activeRadiusCircle) {
+		map.removeLayer(activeRadiusCircle);
+		activeRadiusCircle = null;
 	}
 }
 
@@ -661,13 +670,12 @@ const polygonHighlightStyle = {
 
 // Show radius circle for a location (radius in NM)
 function showRadiusCircle(lat, lon, radiusNM, color) {
-	if (radiusCircle) {
-		map.removeLayer(radiusCircle);
+	if (activeRadiusCircle) {
+		map.removeLayer(activeRadiusCircle);
 	}
-	// Convert NM to meters (1 NM = 1852 m)
-	const radiusMeters = radiusNM * 1852;
+	const radiusMeters = radiusNM * NM_TO_METERS;
 	const circleColor = color || '#0078d4';
-	radiusCircle = L.circle([lat, lon], {
+	activeRadiusCircle = L.circle([lat, lon], {
 		radius: radiusMeters,
 		color: circleColor,
 		fillColor: circleColor,
@@ -679,9 +687,9 @@ function showRadiusCircle(lat, lon, radiusNM, color) {
 
 // Hide radius circle
 function hideRadiusCircle() {
-	if (radiusCircle) {
-		map.removeLayer(radiusCircle);
-		radiusCircle = null;
+	if (activeRadiusCircle) {
+		map.removeLayer(activeRadiusCircle);
+		activeRadiusCircle = null;
 	}
 }
 
@@ -1020,7 +1028,7 @@ function parseAndDisplay() {
 			}).addTo(map);
 			polygon._area = computePolygonArea(notam.coordinates);
 
-			polygon.bindPopup(buildPolygonPopupHtml(notam, navInfo), { maxWidth: 600, maxHeight: 500 });
+			polygon.bindPopup(buildPolygonPopupHtml(notam, navInfo), POPUP_OPTIONS);
 			setupPolygonEvents(polygon, navInfo, polygonMap, centroidKey);
 
 			polygons.push(polygon);
@@ -1030,7 +1038,7 @@ function parseAndDisplay() {
 			const li = document.createElement('li');
 			li.innerHTML = buildPolygonListItemHtml(notam, posIndex);
 			li.querySelector('.notam-header').onclick = () => {
-				map.fitBounds(polygon.getBounds(), { padding: [50, 50] });
+				map.fitBounds(polygon.getBounds(), FIT_BOUNDS_PADDING);
 				polygon.openPopup();
 				document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'center' });
 			};
@@ -1064,7 +1072,7 @@ function parseAndDisplay() {
 		const icon = group.hasQualifierLine ? blueIcon : redIcon;
 		const marker = L.marker([group.lat, group.lon], { icon, zIndexOffset }).addTo(map);
 
-		marker.bindPopup(buildPopupHtml(group, navInfo), { maxWidth: 600, maxHeight: 500 });
+		marker.bindPopup(buildPopupHtml(group, navInfo), POPUP_OPTIONS);
 		setupMarkerEvents(marker, group, navInfo, markerMap);
 
 		markers.push(marker);
@@ -1083,7 +1091,7 @@ function parseAndDisplay() {
 	});
 
 	if (bounds.length > 0) {
-		map.fitBounds(bounds, { padding: [50, 50] });
+		map.fitBounds(bounds, FIT_BOUNDS_PADDING);
 	}
 
 	// Update statistics
@@ -1128,7 +1136,7 @@ async function loadExampleNotams() {
 			document.getElementById('notamInput').value = text;
 		}
 	} catch (error) {
-		console.log('Could not load example file:', error);
+		console.error('Could not load example file:', error);
 	}
 }
 
@@ -1156,7 +1164,7 @@ function clearAll() {
 	document.getElementById('notamInput').value = '';
 	document.getElementById('coordinatesList').innerHTML = '<li class="no-results">No NOTAM parsed yet. Enter NOTAMs and click "Display on map".</li>';
 	clearMarkers();
-	map.setView([48.8566, 2.3522], 6);
+	map.setView(DEFAULT_CENTER, DEFAULT_ZOOM);
 }
 
 // Print map to PDF
