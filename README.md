@@ -26,6 +26,8 @@ Example:
 E) OBSTACLE AT PSN 490204N 0022140E
 ```
 
+When the `RADIUS` keyword is present near the position, the radius is extracted and displayed. On the map, positions with a radius are shown with an orange circle.
+
 ### 2. Area coordinates (orange polygons)
 
 Areas are detected when the E) section contains multiple coordinates (3+) that define a boundary. The parser recognizes areas through:
