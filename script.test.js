@@ -36,7 +36,7 @@ const context = createContext({
 const code = readFileSync(new URL('./script.js', import.meta.url), 'utf-8');
 new Script(code).runInContext(context);
 
-const { parseNotams, parseDMSCoordinate, parseQualifierLineCoordinate,
+const { parseNotams, parseDMSCoordinate, parseQualifierLine,
 	computePolygonArea } = context;
 
 function findNotam(notams, id) {
@@ -53,28 +53,41 @@ function assertNear(actual, expected, msg) {
 const positionsText = readFileSync(new URL('./testdata/positions', import.meta.url), 'utf-8');
 const areasText = readFileSync(new URL('./testdata/areas', import.meta.url), 'utf-8');
 
-// Unit tests for qualifier line coordinate parser
+// Unit tests for qualifier line parser
 
-describe('parseQualifierLineCoordinate', () => {
-	it('should parse coordinate with radius', () => {
-		const c = parseQualifierLineCoordinate('4840N00305E005');
-		assertNear(c.lat, 48.6667, 'lat');
-		assertNear(c.lon, 3.0833, 'lon');
-		assert.equal(c.radius, 5);
+describe('parseQualifierLine', () => {
+	it('should parse all fields with radius', () => {
+		const q = parseQualifierLine('LFFF / QWULW / IV / BO / W / 000/014 / 4840N00305E005');
+		assert.equal(q.fir, 'LFFF');
+		assert.equal(q.code, 'QWULW');
+		assert.equal(q.traffic, 'IV');
+		assert.equal(q.purpose, 'BO');
+		assert.equal(q.scope, 'W');
+		assert.equal(q.lower, 0);
+		assert.equal(q.upper, 14);
+		assertNear(q.lat, 48.6667, 'lat');
+		assertNear(q.lon, 3.0833, 'lon');
+		assert.equal(q.radius, 5);
 	});
 
 	it('should parse coordinate without radius', () => {
-		const c = parseQualifierLineCoordinate('4840N00305E');
-		assertNear(c.lat, 48.6667, 'lat');
-		assertNear(c.lon, 3.0833, 'lon');
-		assert.equal(c.radius, null);
+		const q = parseQualifierLine('LFFF / QOBCE / IV / M / E / 000/011 / 4839N00359E');
+		assert.equal(q.fir, 'LFFF');
+		assert.equal(q.scope, 'E');
+		assertNear(q.lat, 48.65, 'lat');
+		assertNear(q.lon, 3.9833, 'lon');
+		assert.equal(q.radius, null);
 	});
 
 	it('should parse western longitude', () => {
-		const c = parseQualifierLineCoordinate('1615N06116W001');
-		assertNear(c.lat, 16.25, 'lat');
-		assertNear(c.lon, -61.2667, 'lon');
-		assert.equal(c.radius, 1);
+		const q = parseQualifierLine('TTZP / QOBCE / IV / M / AE / 000/002 / 1615N06116W001');
+		assert.equal(q.fir, 'TTZP');
+		assert.equal(q.scope, 'AE');
+		assert.equal(q.lower, 0);
+		assert.equal(q.upper, 2);
+		assertNear(q.lat, 16.25, 'lat');
+		assertNear(q.lon, -61.2667, 'lon');
+		assert.equal(q.radius, 1);
 	});
 });
 
