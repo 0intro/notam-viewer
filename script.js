@@ -275,6 +275,9 @@ function parseNotams(text) {
 				const coordPattern = /(\d{4,7}(?:\.\d+)?[NS])\s+(\d{5,8}(?:\.\d+)?[EW])/gi;
 				let match;
 				let groupClosed = false;
+				// Coarse positions (~111m) from closed groups, used to skip
+				// approximate duplicates (e.g. high-precision vs standard coords)
+				const closedGroupPositions = new Set();
 
 				while ((match = coordPattern.exec(eContent)) !== null) {
 					const coordStr = match[1] + ' ' + match[2];
@@ -283,34 +286,33 @@ function parseNotams(text) {
 					if (coords) {
 						// Create position key for deduplication (rounded to ~1m precision)
 						const posKey = `${coords.lat.toFixed(6)}_${coords.lon.toFixed(6)}`;
+						const coarsePosKey = `${coords.lat.toFixed(3)}_${coords.lon.toFixed(3)}`;
 
-						// Check if this coordinate is parenthesized (polygon closure signal)
-						const beforeMatch = eContent.substring(0, match.index);
-						const afterMatch = eContent.substring(match.index + match[0].length);
-						const isParenthesized = /\(\s*$/.test(beforeMatch) && /^\s*\)/.test(afterMatch);
+						// Skip coordinates that approximately match a closed group
+						if (closedGroupPositions.has(coarsePosKey)) {
+							continue;
+						}
 
-						if (isParenthesized && seenPositions.has(posKey)) {
-							// This is a closing duplicate in parentheses — mark group as closed
-							groupClosed = true;
-						} else {
-							// If previous group was closed, start a new group
-							if (groupClosed && coordinates.length > 0) {
+						if (seenPositions.has(posKey)) {
+							// Duplicate coordinate signals polygon closure
+							if (!groupClosed && coordinates.length > 0) {
 								coordinateGroups.push([...coordinates]);
+								for (const coord of coordinates) {
+									closedGroupPositions.add(`${coord.lat.toFixed(3)}_${coord.lon.toFixed(3)}`);
+								}
 								coordinates.length = 0;
 								seenPositions.clear();
+								groupClosed = true;
 							}
+						} else {
 							groupClosed = false;
-
-							// Only add if we haven't seen this position before
-							if (!seenPositions.has(posKey)) {
-								seenPositions.add(posKey);
-								coordinates.push({
-									original: coordStr.trim(),
-									lat: coords.lat,
-									lon: coords.lon,
-									type: 'psn'
-								});
-							}
+							seenPositions.add(posKey);
+							coordinates.push({
+								original: coordStr.trim(),
+								lat: coords.lat,
+								lon: coords.lon,
+								type: 'psn'
+							});
 						}
 					}
 				}

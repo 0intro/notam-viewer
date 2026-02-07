@@ -234,7 +234,7 @@ describe('parseNotams - areas', () => {
 	const notams = parseNotams(areasText);
 
 	it('should parse all area NOTAMs', () => {
-		assert.equal(notams.length, 10);
+		assert.equal(notams.length, 11);
 	});
 
 	it('should mark all area NOTAMs as polygons', () => {
@@ -302,6 +302,15 @@ describe('parseNotams - areas', () => {
 			computePolygonArea(small.coordinates) < computePolygonArea(large.coordinates),
 			'small area should be smaller than large area'
 		);
+	});
+
+	it('should extract only the polygon, not the straight line (LOWW-A3153/25)', () => {
+		const entries = notams.filter(n => n.id === 'LOWW-A3153/25');
+		assert.equal(entries.length, 1);
+		assert.equal(entries[0].isPolygon, true);
+		assert.equal(entries[0].coordinates.length, 10);
+		assertNear(entries[0].coordinates[0].lat, 47.8625, 'first lat');
+		assertNear(entries[0].coordinates[0].lon, 14.3078, 'first lon');
 	});
 
 	it('should split multiple areas into separate entries (ENGM-A0526/26)', () => {
