@@ -248,12 +248,12 @@ describe('parseNotams - areas', () => {
 	const notams = parseNotams(areasText);
 
 	it('should parse all area NOTAMs', () => {
-		assert.equal(notams.length, 14);
+		assert.equal(notams.length, 15);
 	});
 
 	it('should mark area NOTAMs as polygons', () => {
 		const polygons = notams.filter(n => n.isPolygon);
-		assert.equal(polygons.length, 13);
+		assert.equal(polygons.length, 14);
 	});
 
 	it('should parse LIMITES LATERALES keyword (LFFA-R2339/25)', () => {
@@ -351,6 +351,15 @@ describe('parseNotams - areas', () => {
 		assert.equal(entries[0].coordinates.length, 10);
 		assertNear(entries[0].coordinates[0].lat, 23.7519, 'first lat');
 		assertNear(entries[0].coordinates[0].lon, 79.7553, 'first lon');
+	});
+
+	it('should make simple polygon from self-intersecting coords (EBBR-F0162/26)', () => {
+		const n = findNotam(notams, 'EBBR-F0162/26');
+		assert.ok(n);
+		assert.equal(n.isPolygon, true);
+		assert.equal(n.coordinates.length, 4);
+		assertNear(n.coordinates[0].lat, 49.9914, 'first lat');
+		assertNear(n.coordinates[0].lon, 5.4914, 'first lon');
 	});
 
 	it('should ignore parenthesized coordinate without PSN keyword (VABB-A0190/26 variant)', () => {
