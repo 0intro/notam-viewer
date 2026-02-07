@@ -58,7 +58,7 @@ Coordinates from the Q) line (e.g., 4845N00207E005), which includes a radius in 
 
 ## Demo
 
-Try it online: [https://0intro.github.io/notam-viewer](https://0intro.github.io/notam-viewer)
+Try it online: [https://notam-viewer.net/](https://notam-viewer.net/)
 
 ## Limitations
 
