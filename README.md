@@ -58,6 +58,12 @@ Coordinates from the Q) line (e.g., 4845N00207E005), which includes a radius in 
 
 Try it online: [https://0intro.github.io/notam-viewer](https://0intro.github.io/notam-viewer)
 
+## Limitations
+
+Most useful NOTAM information is contained in the E) section (description), which is not standardized and varies by country and issuing authority. The parser relies on heuristics to detect coordinates based on common patterns and keywords. While it handles most standard formats, some NOTAMs with unusual formatting may not be parsed correctly.
+
+This tool has been primarily tested with NOTAMs from France and EASA countries.
+
 ## License
 
 MIT License - Copyright (c) 2026 David du Colombier
