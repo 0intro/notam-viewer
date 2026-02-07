@@ -272,6 +272,22 @@ function parseNotams(text) {
 
 			// Only extract coordinates if PSN, CENTRED ON, or area keywords are present
 			if (hasPsnKeyword || hasCentredKeyword || hasAreaKeywords) {
+				// When area keywords are present, find the first keyword
+				// directly followed by coordinates; non-PSN coordinates
+				// before it are skipped
+				let extractionStartIndex = 0;
+				if (hasAreaKeywords) {
+					const areaSearchPattern = new RegExp(areaKeywordsPattern.source, 'gi');
+					let areaMatch;
+					while ((areaMatch = areaSearchPattern.exec(eContent)) !== null) {
+						const after = eContent.substring(areaMatch.index + areaMatch[0].length);
+						if (/^.{0,40}?\d{4,7}(?:\.\d+)?[NS]\s+\d{5,8}(?:\.\d+)?[EW]/is.test(after)) {
+							extractionStartIndex = areaMatch.index;
+							break;
+						}
+					}
+				}
+
 				// Find all coordinate-like patterns in the E) section
 				// Matches patterns like: 422726N 0064355W, 4227N 00643W or 455554.997N 0060439.322E
 				const coordPattern = /(\d{4,7}(?:\.\d+)?[NS])\s+(\d{5,8}(?:\.\d+)?[EW])/gi;
@@ -284,38 +300,59 @@ function parseNotams(text) {
 				while ((match = coordPattern.exec(eContent)) !== null) {
 					const coordStr = match[1] + ' ' + match[2];
 					const coords = parseDMSCoordinate(coordStr);
+					if (!coords) continue;
 
-					if (coords) {
-						// Create position key for deduplication (rounded to ~1m precision)
-						const posKey = `${coords.lat.toFixed(6)}_${coords.lon.toFixed(6)}`;
-						const coarsePosKey = `${coords.lat.toFixed(3)}_${coords.lon.toFixed(3)}`;
+					// A standalone PSN has the keyword nearby but is not
+					// dash-connected to the next coordinate (polygon series)
+					const before = eContent.substring(Math.max(0, match.index - 10), match.index);
+					const after = eContent.substring(match.index + match[0].length);
+					const isStandalonePsn = /\bPSN\b/i.test(before) &&
+						!/^\s*-\s*\d{4,7}/i.test(after);
 
-						// Skip coordinates that approximately match a closed group
-						if (closedGroupPositions.has(coarsePosKey)) {
-							continue;
-						}
+					if (isStandalonePsn) {
+						coordinateGroups.push([{
+							original: coordStr.trim(),
+							lat: coords.lat,
+							lon: coords.lon,
+							type: 'psn'
+						}]);
+						continue;
+					}
 
-						if (seenPositions.has(posKey)) {
-							// Duplicate coordinate signals polygon closure
-							if (!groupClosed && coordinates.length > 0) {
-								coordinateGroups.push([...coordinates]);
-								for (const coord of coordinates) {
-									closedGroupPositions.add(`${coord.lat.toFixed(3)}_${coord.lon.toFixed(3)}`);
-								}
-								coordinates.length = 0;
-								seenPositions.clear();
-								groupClosed = true;
+					// Skip non-PSN coordinates before area extraction zone
+					if (match.index < extractionStartIndex) {
+						continue;
+					}
+
+					// Create position key for deduplication (rounded to ~1m precision)
+					const posKey = `${coords.lat.toFixed(6)}_${coords.lon.toFixed(6)}`;
+					const coarsePosKey = `${coords.lat.toFixed(3)}_${coords.lon.toFixed(3)}`;
+
+					// Skip coordinates that approximately match a closed group
+					if (closedGroupPositions.has(coarsePosKey)) {
+						continue;
+					}
+
+					if (seenPositions.has(posKey)) {
+						// Duplicate coordinate signals polygon closure
+						if (!groupClosed && coordinates.length > 0) {
+							coordinateGroups.push([...coordinates]);
+							for (const coord of coordinates) {
+								closedGroupPositions.add(`${coord.lat.toFixed(3)}_${coord.lon.toFixed(3)}`);
 							}
-						} else {
-							groupClosed = false;
-							seenPositions.add(posKey);
-							coordinates.push({
-								original: coordStr.trim(),
-								lat: coords.lat,
-								lon: coords.lon,
-								type: 'psn'
-							});
+							coordinates.length = 0;
+							seenPositions.clear();
+							groupClosed = true;
 						}
+					} else {
+						groupClosed = false;
+						seenPositions.add(posKey);
+						coordinates.push({
+							original: coordStr.trim(),
+							lat: coords.lat,
+							lon: coords.lon,
+							type: 'psn'
+						});
 					}
 				}
 			}
