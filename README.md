@@ -80,7 +80,7 @@ Try it online: [https://notam-viewer.net/](https://notam-viewer.net/)
 
 ## Limitations
 
-Most useful NOTAM information is contained in the E) section (description), which is not standardized and varies by country and issuing authority. The parser relies on heuristics to detect coordinates based on common patterns and keywords. While it handles most standard formats, some NOTAMs with unusual formatting may not be parsed correctly.
+Most useful NOTAM information is contained in the E) section (description), which is not standardized and varies by country and issuing authority. The parser relies on heuristics to detect coordinates based on common patterns and keywords. While it handles most common formats, some NOTAMs with unusual formatting may not be parsed correctly.
 
 This tool has been primarily tested with NOTAMs from France and EASA countries.
 
