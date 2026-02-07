@@ -268,8 +268,8 @@ function parseNotams(text) {
 			// Only extract coordinates if PSN or area keywords are present
 			if (hasPsnKeyword || hasAreaKeywords) {
 				// Find all coordinate-like patterns in the E) section
-				// Matches patterns like: 422726N 0064355W or 4227N 00643W
-				const coordPattern = /(\d{4,7}[NS])\s+(\d{5,8}[EW])/gi;
+				// Matches patterns like: 422726N 0064355W, 4227N 00643W or 455554.997N 0060439.322E
+				const coordPattern = /(\d{4,7}(?:\.\d+)?[NS])\s+(\d{5,8}(?:\.\d+)?[EW])/gi;
 				let match;
 
 				while ((match = coordPattern.exec(eContent)) !== null) {
