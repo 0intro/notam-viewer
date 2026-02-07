@@ -2,6 +2,8 @@
 
 A web-based tool to parse NOTAMs (Notice to Airmen) and display their geographic coordinates on an interactive map.
 
+![Screenshot](images/screenshot.png)
+
 ## Features
 
 - Parse NOTAMs and extract coordinates from PSN (position), areas, and qualifier line
