@@ -221,13 +221,18 @@ function parseDMSCoordinate(coordStr) {
 	let lonStr = match[3];
 	const lonDir = (match[4] || 'E').toUpperCase(); // Default to East
 
-	// Handle 7-digit longitudes (missing either leading zero or tenths of seconds)
+	// Handle 7-digit longitudes (ambiguous between DDDMMSS and DDMMSSs)
 	if (lonStr.length === 7 && !lonStr.includes('.')) {
-		// If starts with 0, append zero for tenths of seconds: 0022140 -> 00221400
-		// If doesn't start with 0, prepend zero for degrees: 1420211 -> 01420211
 		if (lonStr[0] === '0') {
+			// Starts with 0: standard DDDMMSS, append 0 for tenths: 0022140 -> 00221400
+			lonStr = lonStr + '0';
+		} else if (latStr.length === 6 || latStr.includes('.')) {
+			// Standard 6-digit latitude (DDMMSS) or decimal-second latitude
+			// implies standard DDDMMSS longitude: 1211510 -> 12115100
 			lonStr = lonStr + '0';
 		} else {
+			// 7-digit latitude (DDMMSSs) implies DDMMSSs longitude with
+			// missing leading zero: 1420211 -> 01420211
 			lonStr = '0' + lonStr;
 		}
 	}
@@ -354,12 +359,13 @@ function parseNotams(text) {
 		if (eContent) {
 			// Check for position or area keywords
 			const hasPsnKeyword = /\bPSN\b/i.test(eContent);
-			const hasCentredKeyword = /\CENTRED\s+ON\b/i.test(eContent);
+			const hasCentreKeyword = /\bCENTR(?:ED?|ER(?:ED)?)\b/i.test(eContent);
 			const hasObstKeyword = /\bOBST\b/i.test(eContent);
+			const hasObstQCode = sections.Q && /\/\s*QOB/.test(sections.Q);
 			const hasAreaKeywords = areaKeywordsPattern.test(eContent) && !areaExclusionPattern.test(eContent);
 
-			// Only extract coordinates if PSN, CENTRED ON, OBST, or area keywords are present
-			if (hasPsnKeyword || hasCentredKeyword || hasObstKeyword || hasAreaKeywords) {
+			// Only extract coordinates if PSN, CENTRE/CENTER, OBST, obstruction Q-code, or area keywords are present
+			if (hasPsnKeyword || hasCentreKeyword || hasObstKeyword || hasObstQCode || hasAreaKeywords) {
 				// When area keywords are present, find the first keyword
 				// directly followed by coordinates; non-PSN coordinates
 				// before it are skipped
