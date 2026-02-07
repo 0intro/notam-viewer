@@ -281,7 +281,11 @@ const lateralLimitsTranslations = [
 	'LIMITES?\\s+LATERALES?', // French
 	'GRANICE\\s+POZIOME',    // Polish
 ];
-const areaKeywordsPattern = new RegExp('\\b(' + lateralLimitsTranslations.join('|') + '|AREA|WI\\s+COORD)\\b', 'i');
+const areaTranslations = [
+	'AREA', // English
+	'SAHA', // Turkish
+];
+const areaKeywordsPattern = new RegExp('\\b(' + lateralLimitsTranslations.join('|') + '|' + areaTranslations.join('|') + '|WI\\s+COORD)\\b', 'i');
 const areaExclusionPattern = /\bRESTRICTED\s+IN\s+AREA\b/i;
 
 // Extract radius info from text surrounding a coordinate match in the E) section
