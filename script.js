@@ -107,36 +107,39 @@ function formatDMS(lat, lon) {
 	return `${latDeg}°${latMin.toString().padStart(2, '0')}'${latSec.padStart(4, '0')}"${latDir} / ${lonDeg.toString().padStart(3, '0')}°${lonMin.toString().padStart(2, '0')}'${lonSec.padStart(4, '0')}"${lonDir}`;
 }
 
-// Parse qualifier line coordinate string to decimal degrees
-// Format: 4840N00305E005 = 48°40'N, 003°05'E, 5NM radius
-function parseQualifierLineCoordinate(qualifierLineCoord) {
-	// Match format: DDMMN/S + DDDMME/W + optional radius
-	const match = qualifierLineCoord.match(/^(\d{4})([NS])(\d{5})([EW])(\d{3})?$/i);
-	if (!match) {
-		return null;
-	}
+// Parse Q) section content into a structured qualifier line object
+// Format: FIR / CODE / TRAFFIC / PURPOSE / SCOPE / LOWER/UPPER / COORDINATES
+// Example: LFFF / QWULW / IV / BO / W / 000/014 / 4840N00305E005
+function parseQualifierLine(qContent) {
+	const fields = qContent.split(/\s*\/\s*/);
+	if (fields.length < 8) return null;
 
-	const latStr = match[1]; // DDMM
-	const latDir = match[2].toUpperCase();
-	const lonStr = match[3]; // DDDMM
-	const lonDir = match[4].toUpperCase();
-	const radius = match[5] ? parseInt(match[5], 10) : null;
+	const fir = fields[0];
+	const code = fields[1];
+	const traffic = fields[2];
+	const purpose = fields[3];
+	const scope = fields[4];
+	const lower = parseInt(fields[5], 10);
+	const upper = parseInt(fields[6], 10);
 
-	// Parse latitude: DDMM
-	const latDeg = parseInt(latStr.substring(0, 2), 10);
-	const latMin = parseInt(latStr.substring(2, 4), 10);
+	// Parse coordinate: DDMMN/S DDDMME/W + optional 3-digit radius in NM
+	const coordStr = fields[7];
+	const coordMatch = coordStr.match(/^(\d{4})([NS])(\d{5})([EW])(\d{3})?$/i);
+	if (!coordMatch) return null;
 
-	// Parse longitude: DDDMM
-	const lonDeg = parseInt(lonStr.substring(0, 3), 10);
-	const lonMin = parseInt(lonStr.substring(3, 5), 10);
+	const latDeg = parseInt(coordMatch[1].substring(0, 2), 10);
+	const latMin = parseInt(coordMatch[1].substring(2, 4), 10);
+	const lonDeg = parseInt(coordMatch[3].substring(0, 3), 10);
+	const lonMin = parseInt(coordMatch[3].substring(3, 5), 10);
 
 	let lat = latDeg + latMin / 60;
 	let lon = lonDeg + lonMin / 60;
+	if (coordMatch[2].toUpperCase() === 'S') lat = -lat;
+	if (coordMatch[4].toUpperCase() === 'W') lon = -lon;
 
-	if (latDir === 'S') lat = -lat;
-	if (lonDir === 'W') lon = -lon;
+	const radius = coordMatch[5] ? parseInt(coordMatch[5], 10) : null;
 
-	return { lat, lon, radius };
+	return { fir, code, traffic, purpose, scope, lower, upper, lat, lon, radius };
 }
 
 // Parse DMS coordinate string to decimal degrees
@@ -388,27 +391,16 @@ function parseNotams(text) {
 		}
 
 		// Find qualifier line coordinates only if no PSN coordinates found
-		// Format: Q) LFFF / QOBCE / IV / M / A / 000/999 / 4845N00207E005
-		// Radius (last 3 digits) is optional: 4845N00207E or 4845N00207E005
 		if (coordinateGroups.length === 0 && sections.Q) {
-			const qualifierCoords = [];
-			const qualifierCoordMatch = sections.Q.match(/(\d{4}[NS]\d{5}[EW](?:\d{3})?)/i);
-
-			if (qualifierCoordMatch) {
-				const qualifierCoordStr = qualifierCoordMatch[1];
-				const coords = parseQualifierLineCoordinate(qualifierCoordStr);
-				if (coords) {
-					qualifierCoords.push({
-						original: qualifierCoordStr,
-						lat: coords.lat,
-						lon: coords.lon,
-						radius: coords.radius,
-						type: 'qualifierLine'
-					});
-				}
-			}
-			if (qualifierCoords.length > 0) {
-				coordinateGroups.push(qualifierCoords);
+			const qualifier = parseQualifierLine(sections.Q);
+			if (qualifier) {
+				coordinateGroups.push([{
+					original: sections.Q.split(/\s*\/\s*/).pop(),
+					lat: qualifier.lat,
+					lon: qualifier.lon,
+					radius: qualifier.radius,
+					type: 'qualifierLine'
+				}]);
 			}
 		}
 
