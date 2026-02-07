@@ -505,9 +505,18 @@ function parseNotams(text) {
 			}
 		}
 
-		// Collect remaining coordinates as the last group
+		// Collect remaining coordinates as the last group.
+		// When every coordinate carries a radius (circle centres),
+		// emit each one as its own group so they become individual
+		// position markers instead of a single polygon.
 		if (coordinates.length > 0) {
-			coordinateGroups.push(coordinates);
+			if (coordinates.length >= 2 && coordinates.every(c => c.radius != null)) {
+				for (const c of coordinates) {
+					coordinateGroups.push([c]);
+				}
+			} else {
+				coordinateGroups.push(coordinates);
+			}
 		}
 
 		// Find qualifier line coordinates only if no PSN coordinates found
