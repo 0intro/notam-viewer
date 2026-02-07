@@ -228,6 +228,30 @@ function cleanNotamContent(content) {
 const areaKeywordsPattern = /\b(LIMITES?\s+LATERALES?|LATERAL\s+LIMITS?|AREA|WI\s+COORD)\b/i;
 const areaExclusionPattern = /\bRESTRICTED\s+IN\s+AREA\b/i;
 
+// Parse NOTAM content into ICAO sections (Q, A, B, C, D, E, F, G)
+function parseSections(content) {
+	const sections = {};
+	// Match ICAO NOTAM section markers preceded by start-of-string or whitespace
+	// to avoid false matches on text like "2A)" or "(E)"
+	// Each section letter is accepted only once; subsequent occurrences (e.g.
+	// enumerated items A)...E) inside the E) section) are treated as text
+	const re = /(?:^|\s)([QABCDEFG])\)\s?/g;
+	const markers = [];
+	const seen = new Set();
+	let m;
+	while ((m = re.exec(content)) !== null) {
+		if (seen.has(m[1])) continue;
+		seen.add(m[1]);
+		markers.push({ letter: m[1], matchStart: m.index, contentStart: m.index + m[0].length });
+	}
+	for (let i = 0; i < markers.length; i++) {
+		const start = markers[i].contentStart;
+		const end = i + 1 < markers.length ? markers[i + 1].matchStart : content.length;
+		sections[markers[i].letter] = content.substring(start, end).trim();
+	}
+	return sections;
+}
+
 // Parse NOTAMs and extract those with coordinates
 function parseNotams(text) {
 	const notams = [];
@@ -253,14 +277,14 @@ function parseNotams(text) {
 			content = content.substring(0, emptyLineMatch.index);
 		}
 
+		// Parse NOTAM sections
+		const sections = parseSections(content);
+
 		// Find coordinates
 		const coordinates = [];
 		const seenPositions = new Set(); // Track positions to deduplicate
 
-		// Extract E) section content (require newline before next section marker
-		// to avoid false matches on words like FLASH) or NORTH))
-		const eSectionMatch = content.match(/E\)([\s\S]+?)(?=\n[A-Z]\)|$)/i);
-		const eContent = eSectionMatch ? eSectionMatch[1] : null;
+		const eContent = sections.E || null;
 
 		const coordinateGroups = [];
 
@@ -366,13 +390,12 @@ function parseNotams(text) {
 		// Find qualifier line coordinates only if no PSN coordinates found
 		// Format: Q) LFFF / QOBCE / IV / M / A / 000/999 / 4845N00207E005
 		// Radius (last 3 digits) is optional: 4845N00207E or 4845N00207E005
-		// Note: altitude field (000/999) contains a slash, so we just match the coordinate at the end
-		if (coordinateGroups.length === 0) {
+		if (coordinateGroups.length === 0 && sections.Q) {
 			const qualifierCoords = [];
-			const qualifierLineMatches = content.matchAll(/Q\).*?(\d{4}[NS]\d{5}[EW](?:\d{3})?)/gi);
+			const qualifierCoordMatch = sections.Q.match(/(\d{4}[NS]\d{5}[EW](?:\d{3})?)/i);
 
-			for (const match of qualifierLineMatches) {
-				const qualifierCoordStr = match[1];
+			if (qualifierCoordMatch) {
+				const qualifierCoordStr = qualifierCoordMatch[1];
 				const coords = parseQualifierLineCoordinate(qualifierCoordStr);
 				if (coords) {
 					qualifierCoords.push({
@@ -389,9 +412,12 @@ function parseNotams(text) {
 			}
 		}
 
-		// Extract ICAO codes from A) line
-		const icaoMatch = content.match(/A\)\s*([A-Z]{4}(?:\s+[A-Z]{4})*)/i);
-		const icaoCodes = icaoMatch ? icaoMatch[1].split(/\s+/) : [];
+		// Extract ICAO codes from A) section
+		let icaoCodes = [];
+		if (sections.A) {
+			const icaoMatch = sections.A.match(/([A-Z]{4}(?:\s+[A-Z]{4})*)/i);
+			icaoCodes = icaoMatch ? icaoMatch[1].split(/\s+/) : [];
+		}
 
 		// Emit a NOTAM entry for each coordinate group
 		for (const groupCoords of coordinateGroups) {
