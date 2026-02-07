@@ -815,6 +815,24 @@ function parseAndDisplay() {
 	if (bounds.length > 0) {
 		map.fitBounds(bounds, { padding: [50, 50] });
 	}
+
+	// Update statistics
+	const statsEl = document.getElementById('statistics');
+	const totalNotams = notams.length;
+	const areaNotams = notams.filter(n => n.isPolygon).length;
+	const positionNotams = notams.filter(n => !n.isPolygon && n.coordinates.some(c => c.type === 'psn')).length;
+	const qualifierNotams = notams.filter(n => !n.isPolygon && n.coordinates.every(c => c.type === 'qualifierLine')).length;
+
+	if (totalNotams > 0) {
+		statsEl.innerHTML = `
+			<span><strong>All NOTAMs:</strong> ${totalNotams}</span>
+			<span><strong>No position:</strong> ${qualifierNotams}</span>
+			<span><strong>Positions:</strong> ${positionNotams}</span>
+			<span><strong>Areas:</strong> ${areaNotams}</span>
+		`;
+	} else {
+		statsEl.innerHTML = '';
+	}
 }
 
 // Load example NOTAMs from external file
