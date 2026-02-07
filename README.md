@@ -64,6 +64,13 @@ Most useful NOTAM information is contained in the E) section (description), whic
 
 This tool has been primarily tested with NOTAMs from France and EASA countries.
 
+## Issues
+
+If you encounter any problems or have suggestions for improvements:
+
+- **Bug reports**: Please open an issue on [GitHub Issues](https://github.com/0intro/notam-viewer/issues) with a description of the problem and, if possible, the NOTAM text that caused the issue.
+- **Feature requests**: Feel free to suggest new features or improvements via GitHub Issues.
+
 ## License
 
 MIT License - Copyright (c) 2026 David du Colombier
