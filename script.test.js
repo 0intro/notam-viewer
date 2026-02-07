@@ -535,6 +535,12 @@ const statisticsTests = [
 	{ file: 'EGPD-LFKC-20260207.txt', all: 639, noPosition: 237, positions: 361, areas: 41 },
 	{ file: 'KJFK-KLAX-20260209.txt', all: 449, noPosition: 355, positions: 93, areas: 1 },
 	{ file: 'CYQB-CYVR-20260209.txt', all: 366, noPosition: 123, positions: 241, areas: 2 },
+	{ file: 'CYTZ-SAWG-20260209.txt', all: 552, noPosition: 375, positions: 161, areas: 16 },
+	{ file: 'EGLL-FACT-20260209.txt', all: 760, noPosition: 388, positions: 325, areas: 47 },
+	{ file: 'ENGM-YSCB-20260209.txt', all: 455, noPosition: 281, positions: 82, areas: 92 },
+	{ file: 'LEMD-UHWW-20260209.txt', all: 1379, noPosition: 606, positions: 586, areas: 187 },
+	{ file: 'LSHJ-ZBAA-20260209.txt', all: 1097, noPosition: 569, positions: 423, areas: 105 },
+	{ file: 'SBBE-VIDP-20260209.txt', all: 310, noPosition: 265, positions: 23, areas: 22 },
 ];
 
 for (const t of statisticsTests) {
