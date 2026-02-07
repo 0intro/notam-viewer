@@ -4,6 +4,7 @@
   "type": "module",
   "description": "A web-based tool to parse NOTAMs and display their geographic coordinates on an interactive map",
   "scripts": {
+    "test": "node --test",
     "lint": "npm run lint:html && npm run lint:css && npm run lint:js",
     "lint:html": "htmlhint *.html",
     "lint:css": "stylelint \"*.css\"",
