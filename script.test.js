@@ -259,7 +259,7 @@ describe('parseNotams - positions', () => {
 	const notams = parseNotams(positionsText);
 
 	it('should parse all position NOTAMs', () => {
-		assert.equal(notams.length, 12);
+		assert.equal(notams.length, 14);
 	});
 
 	it('should not mark any position NOTAM as polygon', () => {
@@ -312,26 +312,28 @@ describe('parseNotams - positions', () => {
 		assertNear(n.coordinates[0].lon, 14.3392, 'lon');
 	});
 
-	it('should parse circle centres as distinct positions, not polygon (LZIB-A2755/25)', () => {
-		const n = findNotam(notams, 'LZIB-A2755/25');
-		assert.ok(n);
-		assert.equal(n.isPolygon, false);
-		assert.equal(n.coordinates.length, 3);
-		assert.equal(n.coordinates[0].type, 'psn');
-		assertNear(n.coordinates[0].lat, 48.4017, 'lat 1');
-		assertNear(n.coordinates[0].lon, 17.1197, 'lon 1');
-		assertNear(n.coordinates[1].lat, 48.6372, 'lat 2');
-		assertNear(n.coordinates[1].lon, 19.1342, 'lon 2');
-		assertNear(n.coordinates[2].lat, 49.0278, 'lat 3');
-		assertNear(n.coordinates[2].lon, 21.3031, 'lon 3');
+	it('should parse circle centres as separate entries (LZIB-A2755/25)', () => {
+		const entries = notams.filter(n => n.id === 'LZIB-A2755/25');
+		assert.equal(entries.length, 3);
+		for (const n of entries) {
+			assert.equal(n.isPolygon, false);
+			assert.equal(n.coordinates.length, 1);
+			assert.equal(n.coordinates[0].type, 'psn');
+		}
+		assertNear(entries[0].coordinates[0].lat, 48.4017, 'lat 1');
+		assertNear(entries[0].coordinates[0].lon, 17.1197, 'lon 1');
+		assertNear(entries[1].coordinates[0].lat, 48.6372, 'lat 2');
+		assertNear(entries[1].coordinates[0].lon, 19.1342, 'lon 2');
+		assertNear(entries[2].coordinates[0].lat, 49.0278, 'lat 3');
+		assertNear(entries[2].coordinates[0].lon, 21.3031, 'lon 3');
 	});
 
 	it('should extract radius for circle centres (LZIB-A2755/25)', () => {
-		const n = findNotam(notams, 'LZIB-A2755/25');
-		assert.ok(n);
-		for (let i = 0; i < 3; i++) {
-			assert.equal(n.coordinates[i].radius, 5.6, `coord ${i} radius`);
-			assert.equal(n.coordinates[i].radiusUnit, 'KM', `coord ${i} unit`);
+		const entries = notams.filter(n => n.id === 'LZIB-A2755/25');
+		assert.equal(entries.length, 3);
+		for (const n of entries) {
+			assert.equal(n.coordinates[0].radius, 5.6, 'radius');
+			assert.equal(n.coordinates[0].radiusUnit, 'KM', 'unit');
 		}
 	});
 
@@ -395,12 +397,12 @@ describe('parseNotams - areas', () => {
 	const notams = parseNotams(areasText);
 
 	it('should parse all area NOTAMs', () => {
-		assert.equal(notams.length, 16);
+		assert.equal(notams.length, 25);
 	});
 
 	it('should mark area NOTAMs as polygons', () => {
 		const polygons = notams.filter(n => n.isPolygon);
-		assert.equal(polygons.length, 15);
+		assert.equal(polygons.length, 16);
 	});
 
 	it('should parse LIMITES LATERALES keyword (LFFA-R2339/25)', () => {
@@ -516,6 +518,25 @@ describe('parseNotams - areas', () => {
 		}
 	});
 
+	it('should split polygon and circle centres into separate entries (UUUU-Q1191/26)', () => {
+		const entries = notams.filter(n => n.id === 'UUUU-Q1191/26');
+		assert.equal(entries.length, 9);
+
+		// First entry: the polygon area
+		assert.equal(entries[0].isPolygon, true);
+		assert.equal(entries[0].coordinates.length, 14);
+		assertNear(entries[0].coordinates[0].lat, 64.55, 'polygon first lat');
+		assertNear(entries[0].coordinates[0].lon, 55.0831, 'polygon first lon');
+
+		// Remaining 8 entries: individual circle centres with radius
+		for (let i = 1; i < 9; i++) {
+			assert.equal(entries[i].isPolygon, false, `entry ${i} should not be polygon`);
+			assert.equal(entries[i].coordinates.length, 1, `entry ${i} should have 1 coord`);
+			assert.equal(entries[i].coordinates[0].radius, 1, `entry ${i} radius`);
+			assert.equal(entries[i].coordinates[0].radiusUnit, 'KM', `entry ${i} unit`);
+		}
+	});
+
 	it('should make simple polygon from self-intersecting coords (EBBR-F0162/26)', () => {
 		const n = findNotam(notams, 'EBBR-F0162/26');
 		assert.ok(n);
@@ -546,18 +567,18 @@ describe('parseNotams - areas', () => {
 // Integration tests: statistics
 
 const statisticsTests = [
-	{ file: 'Europe-20260203.txt', all: 10424, noPosition: 7429, positions: 2009, areas: 986 },
+	{ file: 'Europe-20260203.txt', all: 10430, noPosition: 7429, positions: 2016, areas: 985 },
 	{ file: 'LPPT-EPWA-20260207.txt', all: 974, noPosition: 410, positions: 447, areas: 117 },
-	{ file: 'EGPD-LFKC-20260207.txt', all: 639, noPosition: 237, positions: 361, areas: 41 },
+	{ file: 'EGPD-LFKC-20260207.txt', all: 640, noPosition: 237, positions: 362, areas: 41 },
 	{ file: 'KJFK-KLAX-20260209.txt', all: 449, noPosition: 355, positions: 93, areas: 1 },
 	{ file: 'CYQB-CYVR-20260209.txt', all: 366, noPosition: 123, positions: 241, areas: 2 },
 	{ file: 'CYTZ-SAWG-20260209.txt', all: 552, noPosition: 375, positions: 161, areas: 16 },
 	{ file: 'EGLL-FACT-20260209.txt', all: 760, noPosition: 388, positions: 325, areas: 47 },
-	{ file: 'ENGM-YSCB-20260209.txt', all: 455, noPosition: 281, positions: 82, areas: 92 },
-	{ file: 'LEMD-UHWW-20260209.txt', all: 1379, noPosition: 606, positions: 586, areas: 187 },
+	{ file: 'ENGM-YSCB-20260209.txt', all: 519, noPosition: 281, positions: 160, areas: 78 },
+	{ file: 'LEMD-UHWW-20260209.txt', all: 1431, noPosition: 606, positions: 649, areas: 176 },
 	{ file: 'LSHJ-ZBAA-20260209.txt', all: 1097, noPosition: 563, positions: 423, areas: 111 },
 	{ file: 'SBBE-VIDP-20260209.txt', all: 310, noPosition: 265, positions: 23, areas: 22 },
-	{ file: 'World-20260207.txt', all: 35470, noPosition: 26578, positions: 5283, areas: 3609 },
+	{ file: 'World-20260207.txt', all: 36078, noPosition: 26578, positions: 6018, areas: 3482 },
 ];
 
 for (const t of statisticsTests) {
