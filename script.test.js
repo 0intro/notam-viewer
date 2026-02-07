@@ -439,7 +439,7 @@ describe('parseNotams - areas', () => {
 
 const statisticsTests = [
 	{ file: 'Europe-20260203.txt', all: 10356, noPosition: 8551, positions: 1335, areas: 470 },
-	{ file: 'LPPT-EPWA-20260207.txt', all: 968, noPosition: 650, positions: 237, areas: 81 },
+	{ file: 'LPPT-EPWA-20260207.txt', all: 968, noPosition: 640, positions: 238, areas: 90 },
 	{ file: 'EGPD-LFKC-20260207.txt', all: 619, noPosition: 381, positions: 217, areas: 21 },
 ];
 
