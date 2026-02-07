@@ -234,7 +234,7 @@ describe('parseNotams - areas', () => {
 	const notams = parseNotams(areasText);
 
 	it('should parse all area NOTAMs', () => {
-		assert.equal(notams.length, 8);
+		assert.equal(notams.length, 10);
 	});
 
 	it('should mark all area NOTAMs as polygons', () => {
@@ -302,5 +302,22 @@ describe('parseNotams - areas', () => {
 			computePolygonArea(small.coordinates) < computePolygonArea(large.coordinates),
 			'small area should be smaller than large area'
 		);
+	});
+
+	it('should split multiple areas into separate entries (ENGM-A0526/26)', () => {
+		const entries = notams.filter(n => n.id === 'ENGM-A0526/26');
+		assert.equal(entries.length, 2);
+		assert.equal(entries[0].isPolygon, true);
+		assert.equal(entries[1].isPolygon, true);
+
+		// First area: Arctic danger zone (4 coordinates)
+		assert.equal(entries[0].coordinates.length, 4);
+		assertNear(entries[0].coordinates[0].lat, 76.3667, 'first area lat');
+		assertNear(entries[0].coordinates[0].lon, 21.9167, 'first area lon');
+
+		// Second area: Barents Sea impact area (6 coordinates)
+		assert.equal(entries[1].coordinates.length, 6);
+		assertNear(entries[1].coordinates[0].lat, 70.9333, 'second area lat');
+		assertNear(entries[1].coordinates[0].lon, 32.0833, 'second area lon');
 	});
 });
