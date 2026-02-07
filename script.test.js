@@ -232,14 +232,13 @@ describe('parseNotams - positions', () => {
 		assertNear(n.coordinates[0].lon, -0.7244, 'lon');
 	});
 
-	it('should fall back to qualifier line when space missing (TTPP-A1652/25)', () => {
+	it('should parse spaceless PSN coordinate (TTPP-A1652/25)', () => {
 		const n = findNotam(notams, 'TTPP-A1652/25');
 		assert.ok(n);
 		assert.equal(n.coordinates.length, 1);
-		assert.equal(n.coordinates[0].type, 'qualifierLine');
-		assertNear(n.coordinates[0].lat, 16.25, 'lat');
-		assertNear(n.coordinates[0].lon, -61.2667, 'lon');
-		assert.equal(n.coordinates[0].radius, 1);
+		assert.equal(n.coordinates[0].type, 'psn');
+		assertNear(n.coordinates[0].lat, 16.2539, 'lat');
+		assertNear(n.coordinates[0].lon, -61.2611, 'lon');
 	});
 
 	it('should parse missing leading zero longitude (LOWW-A0089/26)', () => {
@@ -438,9 +437,10 @@ describe('parseNotams - areas', () => {
 // Integration tests: statistics
 
 const statisticsTests = [
-	{ file: 'Europe-20260203.txt', all: 10356, noPosition: 8551, positions: 1335, areas: 470 },
-	{ file: 'LPPT-EPWA-20260207.txt', all: 968, noPosition: 640, positions: 238, areas: 90 },
-	{ file: 'EGPD-LFKC-20260207.txt', all: 619, noPosition: 381, positions: 217, areas: 21 },
+	{ file: 'Europe-20260203.txt', all: 10424, noPosition: 7666, positions: 1777, areas: 981 },
+	{ file: 'LPPT-EPWA-20260207.txt', all: 974, noPosition: 555, positions: 304, areas: 115 },
+	{ file: 'EGPD-LFKC-20260207.txt', all: 639, noPosition: 350, positions: 249, areas: 40 },
+	{ file: 'KJFK-KLAX-20260209.txt', all: 449, noPosition: 355, positions: 93, areas: 1 },
 ];
 
 for (const t of statisticsTests) {
