@@ -426,7 +426,7 @@ function parseNotams(text) {
 			notams.push({
 				id: notamId,
 				fullContent: cleanNotamContent(content),
-				coordinates: groupCoords,
+				coordinates: isPolygon && isSelfIntersecting(groupCoords) ? makeSimplePolygon(groupCoords) : groupCoords,
 				icaoCodes: icaoCodes,
 				isPolygon: isPolygon
 			});
@@ -446,6 +446,41 @@ function clearMarkers() {
 		map.removeLayer(radiusCircle);
 		radiusCircle = null;
 	}
+}
+
+// Check if two line segments (p1-p2) and (p3-p4) intersect
+function segmentsIntersect(p1, p2, p3, p4) {
+	const d1 = (p4.lon - p3.lon) * (p1.lat - p3.lat) - (p4.lat - p3.lat) * (p1.lon - p3.lon);
+	const d2 = (p4.lon - p3.lon) * (p2.lat - p3.lat) - (p4.lat - p3.lat) * (p2.lon - p3.lon);
+	const d3 = (p2.lon - p1.lon) * (p3.lat - p1.lat) - (p2.lat - p1.lat) * (p3.lon - p1.lon);
+	const d4 = (p2.lon - p1.lon) * (p4.lat - p1.lat) - (p2.lat - p1.lat) * (p4.lon - p1.lon);
+	return d1 * d2 < 0 && d3 * d4 < 0;
+}
+
+// Check if a polygon has any self-intersecting edges
+function isSelfIntersecting(coordinates) {
+	const n = coordinates.length;
+	for (let i = 0; i < n; i++) {
+		for (let j = i + 2; j < n; j++) {
+			if (i === 0 && j === n - 1) continue; // adjacent (wrap-around)
+			if (segmentsIntersect(
+				coordinates[i], coordinates[(i + 1) % n],
+				coordinates[j], coordinates[(j + 1) % n]
+			)) return true;
+		}
+	}
+	return false;
+}
+
+// Sort polygon vertices by angle from centroid to form a simple polygon
+function makeSimplePolygon(coordinates) {
+	const n = coordinates.length;
+	const centroidLat = coordinates.reduce((s, c) => s + c.lat, 0) / n;
+	const centroidLon = coordinates.reduce((s, c) => s + c.lon, 0) / n;
+	return coordinates.slice().sort((a, b) =>
+		Math.atan2(a.lat - centroidLat, a.lon - centroidLon) -
+		Math.atan2(b.lat - centroidLat, b.lon - centroidLon)
+	);
 }
 
 // Compute approximate polygon area using the shoelace formula
