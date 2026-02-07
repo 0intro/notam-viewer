@@ -557,6 +557,7 @@ const statisticsTests = [
 	{ file: 'LEMD-UHWW-20260209.txt', all: 1379, noPosition: 606, positions: 586, areas: 187 },
 	{ file: 'LSHJ-ZBAA-20260209.txt', all: 1097, noPosition: 569, positions: 423, areas: 105 },
 	{ file: 'SBBE-VIDP-20260209.txt', all: 310, noPosition: 265, positions: 23, areas: 22 },
+	{ file: 'World-20260207.txt', all: 35469, noPosition: 26770, positions: 5262, areas: 3437 },
 ];
 
 for (const t of statisticsTests) {
