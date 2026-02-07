@@ -945,6 +945,20 @@ function parseAndDisplay() {
 	}
 }
 
+// Load NOTAMs from a URL
+async function loadNotamsFromUrl(url) {
+	try {
+		const response = await fetch(url);
+		if (response.ok) {
+			const text = await response.text();
+			document.getElementById('notamInput').value = text;
+			parseAndDisplay();
+		}
+	} catch (error) {
+		console.error('Could not load NOTAMs from URL:', error);
+	}
+}
+
 // Load example NOTAMs from external file
 async function loadExampleNotams() {
 	try {
@@ -1100,5 +1114,10 @@ document.addEventListener('DOMContentLoaded', () => {
 	document.getElementById('fileInput').addEventListener('change', handleFileUpload);
 	document.getElementById('clearBtn').addEventListener('click', clearAll);
 
-	loadExampleNotams();
+	const urlParam = new URLSearchParams(window.location.search).get('file');
+	if (urlParam) {
+		loadNotamsFromUrl(urlParam);
+	} else {
+		loadExampleNotams();
+	}
 });
