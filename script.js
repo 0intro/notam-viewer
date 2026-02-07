@@ -261,6 +261,8 @@ function parseNotams(text) {
 		const eSectionMatch = content.match(/E\)([\s\S]+?)(?=\n[A-Z]\)|$)/i);
 		const eContent = eSectionMatch ? eSectionMatch[1] : null;
 
+		const coordinateGroups = [];
+
 		if (eContent) {
 			// Check for position or area keywords
 			const hasPsnKeyword = /\bPSN\b/i.test(eContent);
@@ -272,6 +274,7 @@ function parseNotams(text) {
 				// Matches patterns like: 422726N 0064355W, 4227N 00643W or 455554.997N 0060439.322E
 				const coordPattern = /(\d{4,7}(?:\.\d+)?[NS])\s+(\d{5,8}(?:\.\d+)?[EW])/gi;
 				let match;
+				let groupClosed = false;
 
 				while ((match = coordPattern.exec(eContent)) !== null) {
 					const coordStr = match[1] + ' ' + match[2];
@@ -281,33 +284,57 @@ function parseNotams(text) {
 						// Create position key for deduplication (rounded to ~1m precision)
 						const posKey = `${coords.lat.toFixed(6)}_${coords.lon.toFixed(6)}`;
 
-						// Only add if we haven't seen this position before
-						if (!seenPositions.has(posKey)) {
-							seenPositions.add(posKey);
-							coordinates.push({
-								original: coordStr.trim(),
-								lat: coords.lat,
-								lon: coords.lon,
-								type: 'psn'
-							});
+						// Check if this coordinate is parenthesized (polygon closure signal)
+						const beforeMatch = eContent.substring(0, match.index);
+						const afterMatch = eContent.substring(match.index + match[0].length);
+						const isParenthesized = /\(\s*$/.test(beforeMatch) && /^\s*\)/.test(afterMatch);
+
+						if (isParenthesized && seenPositions.has(posKey)) {
+							// This is a closing duplicate in parentheses — mark group as closed
+							groupClosed = true;
+						} else {
+							// If previous group was closed, start a new group
+							if (groupClosed && coordinates.length > 0) {
+								coordinateGroups.push([...coordinates]);
+								coordinates.length = 0;
+								seenPositions.clear();
+							}
+							groupClosed = false;
+
+							// Only add if we haven't seen this position before
+							if (!seenPositions.has(posKey)) {
+								seenPositions.add(posKey);
+								coordinates.push({
+									original: coordStr.trim(),
+									lat: coords.lat,
+									lon: coords.lon,
+									type: 'psn'
+								});
+							}
 						}
 					}
 				}
 			}
 		}
 
+		// Collect remaining coordinates as the last group
+		if (coordinates.length > 0) {
+			coordinateGroups.push(coordinates);
+		}
+
 		// Find qualifier line coordinates only if no PSN coordinates found
 		// Format: Q) LFFF / QOBCE / IV / M / A / 000/999 / 4845N00207E005
 		// Radius (last 3 digits) is optional: 4845N00207E or 4845N00207E005
 		// Note: altitude field (000/999) contains a slash, so we just match the coordinate at the end
-		if (coordinates.length === 0) {
+		if (coordinateGroups.length === 0) {
+			const qualifierCoords = [];
 			const qualifierLineMatches = content.matchAll(/Q\).*?(\d{4}[NS]\d{5}[EW](?:\d{3})?)/gi);
 
 			for (const match of qualifierLineMatches) {
 				const qualifierCoordStr = match[1];
 				const coords = parseQualifierLineCoordinate(qualifierCoordStr);
 				if (coords) {
-					coordinates.push({
+					qualifierCoords.push({
 						original: qualifierCoordStr,
 						lat: coords.lat,
 						lon: coords.lon,
@@ -316,18 +343,21 @@ function parseNotams(text) {
 					});
 				}
 			}
+			if (qualifierCoords.length > 0) {
+				coordinateGroups.push(qualifierCoords);
+			}
 		}
 
 		// Extract ICAO codes from A) line
 		const icaoMatch = content.match(/A\)\s*([A-Z]{4}(?:\s+[A-Z]{4})*)/i);
 		const icaoCodes = icaoMatch ? icaoMatch[1].split(/\s+/) : [];
 
-		// Only keep NOTAMs with valid coordinates
-		if (coordinates.length > 0) {
+		// Emit a NOTAM entry for each coordinate group
+		for (const groupCoords of coordinateGroups) {
 			// Determine if this is an area/polygon
 			let isPolygon = false;
 
-			if (coordinates.length >= 3 && eContent) {
+			if (groupCoords.length >= 3 && eContent) {
 				// Check for area keywords
 				const hasAreaKeywords = areaKeywordsPattern.test(eContent);
 
@@ -339,8 +369,8 @@ function parseNotams(text) {
 				const hasDashConnectedCoords = /\d{4,7}[NS]\s+\d{5,8}[EW]\s*[-]\s*\d{4,7}[NS]\s+\d{5,8}[EW]/i.test(eContent);
 
 				// Also check if first and last coords in array are same (in case no parentheses used)
-				const firstCoord = coordinates[0];
-				const lastCoord = coordinates[coordinates.length - 1];
+				const firstCoord = groupCoords[0];
+				const lastCoord = groupCoords[groupCoords.length - 1];
 				const isClosed = Math.abs(firstCoord.lat - lastCoord.lat) < 0.001 &&
 				                 Math.abs(firstCoord.lon - lastCoord.lon) < 0.001;
 
@@ -349,13 +379,13 @@ function parseNotams(text) {
 				// - Closing coordinate in parentheses
 				// - Multiple dash-connected coordinates (area pattern)
 				// - First and last coords match
-				isPolygon = hasAreaKeywords || hasClosingCoord || (hasDashConnectedCoords && coordinates.length >= 4) || isClosed;
+				isPolygon = hasAreaKeywords || hasClosingCoord || (hasDashConnectedCoords && groupCoords.length >= 4) || isClosed;
 			}
 
 			notams.push({
 				id: notamId,
 				fullContent: cleanNotamContent(content),
-				coordinates: coordinates,
+				coordinates: groupCoords,
 				icaoCodes: icaoCodes,
 				isPolygon: isPolygon
 			});
