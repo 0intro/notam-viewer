@@ -196,6 +196,18 @@ function parseQualifierLine(qContent) {
 	return { fir, code, traffic, purpose, scope, lower, upper, lat, lon, radius };
 }
 
+// Parse a DMS numeric string with the given number of degree digits into decimal degrees.
+// Handles both integer-tenths (e.g. 7 digits for lat) and explicit decimal (e.g. "4024.5").
+function parseDMSComponent(str, degDigits) {
+	const deg = parseInt(str.substring(0, degDigits), 10);
+	const min = parseInt(str.substring(degDigits, degDigits + 2), 10);
+	const secStr = str.substring(degDigits + 2);
+	const sec = (secStr.length > 2 && !secStr.includes('.'))
+		? parseFloat(secStr.substring(0, 2) + '.' + secStr.substring(2))
+		: parseFloat(secStr);
+	return deg + min / 60 + sec / 3600;
+}
+
 // Parse DMS coordinate string to decimal degrees
 function parseDMSCoordinate(coordStr) {
 	coordStr = coordStr.trim();
@@ -237,40 +249,8 @@ function parseDMSCoordinate(coordStr) {
 		}
 	}
 
-	// Parse latitude: DDMMSS or DDMMSSs (7th digit is tenths of seconds)
-	let latDeg, latMin, latSec;
-	if (latStr.includes('.')) {
-		latDeg = parseInt(latStr.substring(0, 2), 10);
-		latMin = parseInt(latStr.substring(2, 4), 10);
-		latSec = parseFloat(latStr.substring(4));
-	} else if (latStr.length === 7) {
-		latDeg = parseInt(latStr.substring(0, 2), 10);
-		latMin = parseInt(latStr.substring(2, 4), 10);
-		latSec = parseFloat(latStr.substring(4, 6) + '.' + latStr.substring(6));
-	} else {
-		latDeg = parseInt(latStr.substring(0, 2), 10);
-		latMin = parseInt(latStr.substring(2, 4), 10);
-		latSec = parseFloat(latStr.substring(4));
-	}
-
-	// Parse longitude: DDDMMSS or DDDMMSSs (8th digit is tenths of seconds)
-	let lonDeg, lonMin, lonSec;
-	if (lonStr.includes('.')) {
-		lonDeg = parseInt(lonStr.substring(0, 3), 10);
-		lonMin = parseInt(lonStr.substring(3, 5), 10);
-		lonSec = parseFloat(lonStr.substring(5));
-	} else if (lonStr.length === 8) {
-		lonDeg = parseInt(lonStr.substring(0, 3), 10);
-		lonMin = parseInt(lonStr.substring(3, 5), 10);
-		lonSec = parseFloat(lonStr.substring(5, 7) + '.' + lonStr.substring(7));
-	} else {
-		lonDeg = parseInt(lonStr.substring(0, 3), 10);
-		lonMin = parseInt(lonStr.substring(3, 5), 10);
-		lonSec = parseFloat(lonStr.substring(5));
-	}
-
-	let lat = latDeg + latMin / 60 + latSec / 3600;
-	let lon = lonDeg + lonMin / 60 + lonSec / 3600;
+	let lat = parseDMSComponent(latStr, 2);
+	let lon = parseDMSComponent(lonStr, 3);
 
 	if (latDir === 'S') lat = -lat;
 	if (lonDir === 'W') lon = -lon;
@@ -430,7 +410,7 @@ function parseNotams(text) {
 
 				// Find all coordinate-like patterns in the E) section
 				// Matches patterns like: 422726N 0064355W, 4227N 00643W or 455554.997N 0060439.322E
-				const coordPattern = /(\d{4,7}(?:\.\d+)?[NS])\s+(\d{5,8}(?:\.\d+)?[EW])|(\d{6})([NS])(\d{7})([EW])/gi;
+				const coordPattern = /(\d{4,7}(?:\.\d+)?)([NS])\s+(\d{5,8}(?:\.\d+)?)([EW])|(\d{6})([NS])(\d{7})([EW])/gi;
 				let match;
 				let groupClosed = false;
 				// Coarse positions (~111m) from closed groups, used to skip
@@ -438,28 +418,10 @@ function parseNotams(text) {
 				const closedGroupPositions = new Set();
 
 				while ((match = coordPattern.exec(eContent)) !== null) {
-					let coordStr, coords;
-					if (match[1]) {
-						// Spaced format: use existing parser
-						coordStr = match[1] + ' ' + match[2];
-						coords = parseDMSCoordinate(coordStr);
-					} else {
-						// Spaceless format: DDMMSS[NS]DDDMMSS[EW]
-						coordStr = match[3] + match[4] + match[5] + match[6];
-						const latStr = match[3], latDir = match[4];
-						const lonStr = match[5], lonDir = match[6];
-						const latD = parseInt(latStr.substring(0, 2), 10);
-						const latM = parseInt(latStr.substring(2, 4), 10);
-						const latS = parseInt(latStr.substring(4, 6), 10);
-						const lonD = parseInt(lonStr.substring(0, 3), 10);
-						const lonM = parseInt(lonStr.substring(3, 5), 10);
-						const lonS = parseInt(lonStr.substring(5, 7), 10);
-						let lat = latD + latM / 60 + latS / 3600;
-						let lon = lonD + lonM / 60 + lonS / 3600;
-						if (latDir === 'S') lat = -lat;
-						if (lonDir === 'W') lon = -lon;
-						coords = { lat, lon };
-					}
+					const coordStr = match[1]
+						? match[1] + match[2] + ' ' + match[3] + match[4]
+						: match[5] + match[6] + ' ' + match[7] + match[8];
+					const coords = parseDMSCoordinate(coordStr);
 					if (!coords) continue;
 
 					// A standalone PSN has the keyword nearby but is not
