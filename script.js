@@ -230,6 +230,7 @@ const areaKeywordsPattern = /\b(LIMITES?\s+LATERALES?|LATERAL\s+LIMITS?|AREA|WI\
 // Parse NOTAMs and extract those with coordinates
 function parseNotams(text) {
 	const notams = [];
+	const seenIds = new Set();
 
 	// Split into individual NOTAMs using the NOTAM ID pattern
 	// Support SOFIA-Briefing format (LFFF-A1234/25) and autorouter formats (LFFF A1234/25 and A1234/25)
@@ -241,6 +242,8 @@ function parseNotams(text) {
 	for (let i = 1; i < parts.length; i += 2) {
 		// Strip any trailing action suffix from the ID
 		const notamId = parts[i].replace(/\s*NOTAM[NRC]?\s*$/i, '').trim();
+		if (seenIds.has(notamId)) continue;
+		seenIds.add(notamId);
 		let content = parts[i + 1] || '';
 
 		// NOTAM content ends at an empty line
