@@ -266,6 +266,16 @@ function parseDMSCoordinate(coordStr) {
 		}
 	}
 
+	// Handle 8-digit longitudes with extra leading zero (e.g. 00161448 -> 0161448).
+	// When DDDMMSSs gives invalid minutes (MM > 59), strip the leading '0' and
+	// parse as 7-digit DDDMMSS.
+	if (lonStr.length === 8 && lonStr[0] === '0' && !lonStr.includes('.')) {
+		const mm = parseInt(lonStr.substring(3, 5), 10);
+		if (mm > 59) {
+			lonStr = lonStr.substring(1);
+		}
+	}
+
 	let lat = parseDMSComponent(latStr, 2);
 	let lon = parseDMSComponent(lonStr, 3);
 

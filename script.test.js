@@ -259,7 +259,7 @@ describe('parseNotams - positions', () => {
 	const notams = parseNotams(positionsText);
 
 	it('should parse all position NOTAMs', () => {
-		assert.equal(notams.length, 16);
+		assert.equal(notams.length, 17);
 	});
 
 	it('should not mark any position NOTAM as polygon', () => {
@@ -301,6 +301,15 @@ describe('parseNotams - positions', () => {
 		assert.equal(n.coordinates[0].type, 'psn');
 		assertNear(n.coordinates[0].lat, 16.2539, 'lat');
 		assertNear(n.coordinates[0].lon, -61.2611, 'lon');
+	});
+
+	it('should parse extra leading zero longitude (LEAN-R0341/26)', () => {
+		const n = findNotam(notams, 'LEAN-R0341/26');
+		assert.ok(n);
+		assert.equal(n.coordinates.length, 1);
+		assert.equal(n.coordinates[0].type, 'psn');
+		assertNear(n.coordinates[0].lat, 28.4722, 'lat');
+		assertNear(n.coordinates[0].lon, -16.2467, 'lon');
 	});
 
 	it('should parse missing leading zero longitude (LOWW-A0089/26)', () => {
