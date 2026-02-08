@@ -259,7 +259,7 @@ describe('parseNotams - positions', () => {
 	const notams = parseNotams(positionsText);
 
 	it('should parse all position NOTAMs', () => {
-		assert.equal(notams.length, 15);
+		assert.equal(notams.length, 16);
 	});
 
 	it('should not mark any position NOTAM as polygon', () => {
@@ -366,6 +366,15 @@ describe('parseNotams - positions', () => {
 		assert.equal(n.coordinates[0].type, 'psn');
 		assertNear(n.coordinates[0].lat, 45.9319, 'lat');
 		assertNear(n.coordinates[0].lon, 6.0776, 'lon');
+	});
+
+	it('should parse 6-digit longitude with decimal seconds (LFFA-P0257/26)', () => {
+		const n = findNotam(notams, 'LFFA-P0257/26');
+		assert.ok(n);
+		assert.equal(n.coordinates.length, 1);
+		assert.equal(n.coordinates[0].type, 'psn');
+		assertNear(n.coordinates[0].lat, 48.1076, 'lat');
+		assertNear(n.coordinates[0].lon, 7.3538, 'lon');
 	});
 
 	it('should parse 6-digit longitude with PSN COORD (WGS-84) (LIIC-M6131/25)', () => {
