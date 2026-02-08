@@ -21,6 +21,7 @@ const context = createContext({
 		control: { layers() { return { ...mockLayer }; } },
 		icon() { return {}; },
 		canvas() { return {}; },
+		Browser: { touch: false },
 	},
 	document: {
 		addEventListener() {},
@@ -31,6 +32,11 @@ const context = createContext({
 	console,
 	setTimeout(fn) { fn(); },
 	fetch() { return Promise.resolve({ ok: false }); },
+	window: {
+		addEventListener() {},
+		visualViewport: { addEventListener() {} },
+		location: { search: "" },
+	},
 });
 
 const code = readFileSync(new URL('./script.js', import.meta.url), 'utf-8');

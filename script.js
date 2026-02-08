@@ -94,6 +94,27 @@ let markers = [];
 let activeRadiusCircle = null; // Current radius circle on map
 let polygons = []; // Polygons for area NOTAMs
 
+// On touch devices, when a tap misses a marker's DOM hit area (e.g. due to
+// rendering offset on Android), the tap falls through to the map background.
+// This handler catches those taps and opens the nearest marker's popup.
+if (L.Browser && L.Browser.touch) {
+	map.on('click', function(e) {
+		let closest = null;
+		let closestDist = Infinity;
+		markers.forEach(function(m) {
+			const pt = map.latLngToContainerPoint(m.getLatLng());
+			const dist = e.containerPoint.distanceTo(pt);
+			if (dist < closestDist) {
+				closestDist = dist;
+				closest = m;
+			}
+		});
+		if (closest && closestDist < 40) {
+			setTimeout(function() { closest.openPopup(); }, 0);
+		}
+	});
+}
+
 // Format decimal degrees to DMS (Degrees Minutes Seconds) format
 // Example: 46.6468611, 14.3392 -> "46°38'48.7"N / 014°20'21.1"E"
 function formatDMS(lat, lon) {
@@ -1304,6 +1325,19 @@ function toggleFullscreen() {
 
 	// Leaflet needs to recalculate size after container changes
 	setTimeout(() => map.invalidateSize(), 100);
+}
+
+// Recalculate map container bounds after viewport changes (e.g. Android address bar hide/show)
+let invalidateSizeTimeout = null;
+function debouncedInvalidateSize() {
+	if (invalidateSizeTimeout) clearTimeout(invalidateSizeTimeout);
+	invalidateSizeTimeout = setTimeout(() => map.invalidateSize(), 100);
+}
+window.addEventListener('scroll', debouncedInvalidateSize);
+window.addEventListener('resize', debouncedInvalidateSize);
+if (window.visualViewport) {
+	window.visualViewport.addEventListener('resize', debouncedInvalidateSize);
+	window.visualViewport.addEventListener('scroll', debouncedInvalidateSize);
 }
 
 // Initialize on page load
