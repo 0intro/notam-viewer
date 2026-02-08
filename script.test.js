@@ -259,7 +259,7 @@ describe('parseNotams - positions', () => {
 	const notams = parseNotams(positionsText);
 
 	it('should parse all position NOTAMs', () => {
-		assert.equal(notams.length, 14);
+		assert.equal(notams.length, 15);
 	});
 
 	it('should not mark any position NOTAM as polygon', () => {
@@ -366,6 +366,15 @@ describe('parseNotams - positions', () => {
 		assert.equal(n.coordinates[0].type, 'psn');
 		assertNear(n.coordinates[0].lat, 45.9319, 'lat');
 		assertNear(n.coordinates[0].lon, 6.0776, 'lon');
+	});
+
+	it('should parse 6-digit longitude with PSN COORD (WGS-84) (LIIC-M6131/25)', () => {
+		const n = findNotam(notams, 'LIIC-M6131/25');
+		assert.ok(n);
+		assert.equal(n.coordinates.length, 1);
+		assert.equal(n.coordinates[0].type, 'psn');
+		assertNear(n.coordinates[0].lat, 44.6647, 'lat');
+		assertNear(n.coordinates[0].lon, 9.1283, 'lon');
 	});
 
 	it('should parse standard PSN after descriptive text (LFFA-C4783/25)', () => {
@@ -567,18 +576,18 @@ describe('parseNotams - areas', () => {
 // Integration tests: statistics
 
 const statisticsTests = [
-	{ file: 'Europe-20260203.txt', all: 10430, noPosition: 7429, positions: 2016, areas: 985 },
-	{ file: 'LPPT-EPWA-20260207.txt', all: 974, noPosition: 410, positions: 447, areas: 117 },
-	{ file: 'EGPD-LFKC-20260207.txt', all: 640, noPosition: 237, positions: 362, areas: 41 },
+	{ file: 'Europe-20260203.txt', all: 10814, noPosition: 7282, positions: 2550, areas: 982 },
+	{ file: 'LPPT-EPWA-20260207.txt', all: 975, noPosition: 410, positions: 448, areas: 117 },
+	{ file: 'EGPD-LFKC-20260207.txt', all: 674, noPosition: 228, positions: 405, areas: 41 },
 	{ file: 'KJFK-KLAX-20260209.txt', all: 449, noPosition: 355, positions: 93, areas: 1 },
-	{ file: 'CYQB-CYVR-20260209.txt', all: 366, noPosition: 123, positions: 241, areas: 2 },
+	{ file: 'CYQB-CYVR-20260209.txt', all: 366, noPosition: 122, positions: 242, areas: 2 },
 	{ file: 'CYTZ-SAWG-20260209.txt', all: 552, noPosition: 375, positions: 161, areas: 16 },
-	{ file: 'EGLL-FACT-20260209.txt', all: 760, noPosition: 388, positions: 325, areas: 47 },
+	{ file: 'EGLL-FACT-20260209.txt', all: 756, noPosition: 388, positions: 320, areas: 48 },
 	{ file: 'ENGM-YSCB-20260209.txt', all: 519, noPosition: 281, positions: 160, areas: 78 },
-	{ file: 'LEMD-UHWW-20260209.txt', all: 1431, noPosition: 606, positions: 649, areas: 176 },
-	{ file: 'LSHJ-ZBAA-20260209.txt', all: 1097, noPosition: 563, positions: 423, areas: 111 },
-	{ file: 'SBBE-VIDP-20260209.txt', all: 310, noPosition: 265, positions: 23, areas: 22 },
-	{ file: 'World-20260207.txt', all: 36078, noPosition: 26578, positions: 6018, areas: 3482 },
+	{ file: 'LEMD-UHWW-20260209.txt', all: 1431, noPosition: 605, positions: 650, areas: 176 },
+	{ file: 'LSHJ-ZBAA-20260209.txt', all: 1336, noPosition: 475, positions: 753, areas: 108 },
+	{ file: 'SBBE-VIDP-20260209.txt', all: 310, noPosition: 264, positions: 24, areas: 22 },
+	{ file: 'World-20260207.txt', all: 36465, noPosition: 26418, positions: 6567, areas: 3480 },
 ];
 
 for (const t of statisticsTests) {

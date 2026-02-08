@@ -224,9 +224,9 @@ function parseDMSCoordinate(coordStr) {
 	// Try to match format with space first: "484024N 0030441E"
 	// Then try format without space: "161514N0611540W"
 	// Latitude: 6-7 digits + N/S (7th digit = tenths of seconds)
-	// Longitude: 7-8 digits + E/W (8th digit = tenths of seconds)
+	// Longitude: 6-8 digits + E/W (6 = DDMMSS, 7 = DDDMMSS or DDMMSSs, 8 = DDDMMSSs)
 
-	let match = coordStr.match(/(\d{6,7}(?:\.\d+)?)\s*([NS])?\s+(\d{7,8}(?:\.\d+)?)\s*([EW])?/i);
+	let match = coordStr.match(/(\d{6,7}(?:\.\d+)?)\s*([NS])?\s+(\d{6,8}(?:\.\d+)?)\s*([EW])?/i);
 
 	// If no match with space, try format without space
 	if (!match) {
@@ -241,6 +241,11 @@ function parseDMSCoordinate(coordStr) {
 	const latDir = (match[2] || 'N').toUpperCase(); // Default to North
 	let lonStr = match[3];
 	const lonDir = (match[4] || 'E').toUpperCase(); // Default to East
+
+	// Handle 6-digit longitudes (DDMMSS): pad to DDDMMSS then to DDDMMSSs
+	if (lonStr.length === 6 && !lonStr.includes('.')) {
+		lonStr = '0' + lonStr;
+	}
 
 	// Handle 7-digit longitudes (ambiguous between DDDMMSS and DDMMSSs)
 	if (lonStr.length === 7 && !lonStr.includes('.')) {
@@ -437,11 +442,12 @@ function parseNotams(text) {
 					const coords = parseDMSCoordinate(coordStr);
 					if (!coords) continue;
 
-					// A standalone PSN has the keyword nearby but is not
+					// A standalone PSN has the keyword on the same line but is not
 					// dash-connected to the next coordinate (polygon series)
-					const before = eContent.substring(Math.max(0, match.index - 10), match.index);
+					const before = eContent.substring(Math.max(0, match.index - 30), match.index);
+					const sameLine = before.includes('\n') ? before.substring(before.lastIndexOf('\n') + 1) : before;
 					const after = eContent.substring(match.index + match[0].length);
-					const isStandalonePsn = /\bPSN\b/i.test(before) &&
+					const isStandalonePsn = /\bPSN\b/i.test(sameLine) &&
 						!/^\s*-\s*\d{4,7}/i.test(after);
 
 					if (isStandalonePsn) {
