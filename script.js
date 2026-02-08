@@ -242,13 +242,16 @@ function parseDMSCoordinate(coordStr) {
 	let lonStr = match[3];
 	const lonDir = (match[4] || 'E').toUpperCase(); // Default to East
 
-	// Handle 6-digit longitudes (DDMMSS): pad to DDDMMSS then to DDDMMSSs
-	if (lonStr.length === 6 && !lonStr.includes('.')) {
+	// Count digits before the decimal point (or all digits if no decimal)
+	const lonIntDigits = lonStr.includes('.') ? lonStr.indexOf('.') : lonStr.length;
+
+	// Handle 6-digit longitudes (DDMMSS): pad to DDDMMSS
+	if (lonIntDigits === 6) {
 		lonStr = '0' + lonStr;
 	}
 
 	// Handle 7-digit longitudes (ambiguous between DDDMMSS and DDMMSSs)
-	if (lonStr.length === 7 && !lonStr.includes('.')) {
+	if (lonIntDigits === 7 && !lonStr.includes('.')) {
 		if (lonStr[0] === '0') {
 			// Starts with 0: standard DDDMMSS, append 0 for tenths: 0022140 -> 00221400
 			lonStr = lonStr + '0';
