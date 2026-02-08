@@ -608,6 +608,67 @@ const statisticsTests = [
 	{ file: 'World-20260207.txt', all: 36465, noPosition: 26418, positions: 6567, areas: 3480 },
 ];
 
+// NOTAMs to be investigated: coordinates far from Q-line due to
+// NOTAM data errors, Q-line imprecision, or ambiguous coordinate formats.
+const coordinateExclusions = new Set([
+	// 6-digit longitude ambiguity (DDMMSS vs truncated DDDMMSS)
+	'LGGG-A0292/26',  // 025500E: parsed as 2.9°E, should be 25.8°E
+	'LFFA-P4354/25',  // 021600E: parsed as 2.3°E, should be 21.6°E (Réunion)
+	'LEAN-A7783/25',  // 035600W: parsed as 3.9°W, should be 35.9°W (Canary Islands)
+	// NOTAM coordinate errors (typos in the NOTAM itself)
+	'EHAM-A0321/26',  // invalid seconds (070.0), parsed coordinates far off
+	'KSLC-A0386/26',  // latitude ~1° off from expected position
+	'EPWW-D8111/25',  // extra digit in latitude: 5114050.57N, should be 514050.57N
+	'LFFA-P0049/26',  // extra '0' in longitude: 00663101.4E, should be 0063101.4E
+	// Q-line data errors (wrong Q-line centre or radius)
+	'UUUU-U1184/23',  // Q-line radius too small for route extent
+	'OIII-A0289/26',  // Q-line centre wrong, coordinates 241NM away
+	'EPWW-D7994/25',  // Q-line centre wrong, coordinates 231NM away
+	'EPWW-N7994/25',  // Q-line centre wrong, coordinates 231NM away
+	'EHAM-A0324/26',  // Q-line centre wrong, coordinates 56NM away
+	'KZLA-A4180/25',  // Q-line centre wrong, coordinates 162NM away
+	'LIIC-M0021/25',  // Q-line centre wrong, coordinates 90NM away
+	'LIIC-M2022/25',  // Q-line centre wrong, coordinates 134NM away
+	'LIIC-M4598/24',  // Q-line centre wrong, coordinates 122NM away
+	'LIIC-M4599/24',  // Q-line centre wrong, coordinates 122NM away
+	'LIIA-W5239/25',  // Q-line centre wrong, coordinates 119NM away
+	'LIIA-W0074/26',  // Q-line centre wrong, coordinates 60NM away
+	'VECC-A2279/25',  // Q-line centre ~1° lon off, coordinates 50NM away
+	'EDDZ-D0239/26',  // Q-line centre wrong, coordinates 23NM away
+	'EDDZ-D0240/26',  // Q-line centre wrong, coordinates 43NM away
+	// Arc centre parsed as PSN (parser issue)
+	'RJAA-P0490/26',  // arc centre 108NM from Q-centre, Q-radius 61NM
+	'RJAA-P0491/26',  // arc centre 75NM from Q-centre, Q-radius 40NM
+	'RJAA-P0495/26',  // arc centre 102NM from Q-centre, Q-radius 66NM
+	// Base of operations far from survey area
+	'VIDP-A0122/26',  // base at Shahpura 35NM from Q-centre, Q-radius 13NM
+]);
+
+function assertCoordinatesNearQualifierLine(notams, maxDist) {
+	const decoded = notams.filter(n => !n.isPolygon && n.coordinates.some(c => c.type === 'psn'));
+	for (const n of decoded) {
+		if (coordinateExclusions.has(n.id)) continue;
+		const sections = parseSections(n.fullContent);
+		if (!sections.Q) continue;
+		const q = parseQualifierLine(sections.Q);
+		// Skip NOTAMs with max Q-line radius (too coarse) or missing radius
+		if (!q || q.radius === 999) continue;
+		for (const c of n.coordinates) {
+			// Skip when Q-line and coordinate are in opposite hemispheres
+			// (indicates a Q-line data error, not a parsing bug)
+			if ((q.lat < 0) !== (c.lat < 0)) continue;
+			const dlat = (c.lat - q.lat) * 60;
+			const dlon = (c.lon - q.lon) * 60 * Math.cos(q.lat * Math.PI / 180);
+			const dist = Math.sqrt(dlat * dlat + dlon * dlon);
+			const limit = q.radius + maxDist;
+			assert.ok(dist <= limit,
+				`${n.id} coordinate ${c.original} is ${dist.toFixed(0)}NM from qualifier ` +
+				`centre (${q.lat.toFixed(2)}, ${q.lon.toFixed(2)}), exceeds ${limit}NM ` +
+				`(Q-radius ${q.radius}NM + ${maxDist}NM)`);
+		}
+	}
+}
+
 for (const t of statisticsTests) {
 	describe(`parseNotams - ${t.file} statistics`, () => {
 		const text = readFileSync(new URL(`./testdata/${t.file}`, import.meta.url), 'utf-8');
@@ -630,6 +691,10 @@ for (const t of statisticsTests) {
 
 		it('should count area NOTAMs', () => {
 			assert.equal(areas, t.areas);
+		});
+
+		it('should place all decoded coordinates within 20NM of qualifier line', () => {
+			assertCoordinatesNearQualifierLine(notams, 20);
 		});
 	});
 }
