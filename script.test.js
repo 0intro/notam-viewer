@@ -9,7 +9,23 @@ const mockLayer = {
 	on() { return this; },
 	bindPopup() { return this; },
 	setView() { return this; },
+	addLayer() { return this; },
+	addLayers() { return this; },
+	removeLayer() { return this; },
+	getLayers() { return []; },
+	remove() { return this; },
+	addOverlay() { return this; },
+	openPopup() { return this; },
+	createPane() {},
+	getPane() { return { style: {} }; },
+	hasLayer() { return false; },
+	getZoom() { return 6; },
 };
+
+class MockControl {
+	addTo() { return this; }
+	remove() { return this; }
+}
 
 const context = createContext({
 	L: {
@@ -21,6 +37,22 @@ const context = createContext({
 		control: { layers() { return { ...mockLayer }; } },
 		icon() { return {}; },
 		canvas() { return {}; },
+		markerClusterGroup() { return { ...mockLayer }; },
+		circleMarker() { return { ...mockLayer }; },
+		layerGroup() { return { ...mockLayer }; },
+		Control: Object.assign(MockControl, {
+			extend(proto) {
+				class Extended extends MockControl {
+					constructor(opts) {
+						super();
+						this.options = opts;
+						Object.assign(this, proto);
+					}
+				}
+				return Extended;
+			}
+		}),
+		DomUtil: { create() { return { textContent: '' }; } },
 		Browser: { touch: false },
 	},
 	document: {
@@ -44,7 +76,9 @@ new Script(code).runInContext(context);
 
 const { parseNotams, parseDMSCoordinate, parseQualifierLine,
 	parseNotamDates, parseSections, computePolygonArea,
-	extractRadiusFromText, radiusToNM } = context;
+	extractRadiusFromText, radiusToNM,
+	buildAirportPopupHtml, airportStyleForType, escapeHtml, prettyAirportType,
+	airportTypeIcon, buildRunwaysHtml, formatSurface } = context;
 
 function findNotam(notams, id) {
 	return notams.find(n => n.id === id);
@@ -893,3 +927,218 @@ for (const t of statisticsTests) {
 		});
 	});
 }
+
+describe('escapeHtml', () => {
+	it('escapes HTML special characters', () => {
+		assert.equal(
+			escapeHtml('<script>"bad" & \'evil\'</script>'),
+			'&lt;script&gt;&quot;bad&quot; &amp; &#39;evil&#39;&lt;/script&gt;'
+		);
+	});
+
+	it('returns empty string for null or undefined', () => {
+		assert.equal(escapeHtml(null), '');
+		assert.equal(escapeHtml(undefined), '');
+	});
+
+	it('coerces non-strings to strings', () => {
+		assert.equal(escapeHtml(42), '42');
+	});
+});
+
+describe('prettyAirportType', () => {
+	it('formats underscore-separated type names', () => {
+		assert.equal(prettyAirportType('large_airport'), 'Large airport');
+		assert.equal(prettyAirportType('seaplane_base'), 'Seaplane base');
+	});
+});
+
+describe('airportStyleForType', () => {
+	it('returns a distinct style for each known type', () => {
+		const large = airportStyleForType('large_airport');
+		const small = airportStyleForType('small_airport');
+		const heli = airportStyleForType('heliport');
+		assert.ok(large.radius >= small.radius, 'large airport dot should be >= small');
+		assert.notEqual(large.fillColor, heli.fillColor);
+	});
+
+	it('falls back to small_airport for unknown types', () => {
+		assert.deepEqual(
+			airportStyleForType('unknown_type_xyz'),
+			airportStyleForType('small_airport')
+		);
+	});
+});
+
+describe('airportTypeIcon', () => {
+	it('returns the airport SVG for the three airport sizes', () => {
+		const a = airportTypeIcon('large_airport');
+		assert.ok(a.startsWith('<svg'));
+		assert.equal(a, airportTypeIcon('medium_airport'));
+		assert.equal(a, airportTypeIcon('small_airport'));
+	});
+
+	it('returns a distinct heliport SVG', () => {
+		const h = airportTypeIcon('heliport');
+		const a = airportTypeIcon('large_airport');
+		assert.ok(h.startsWith('<svg'));
+		assert.notEqual(h, a);
+	});
+
+	it('returns a distinct seaplane-base SVG', () => {
+		const s = airportTypeIcon('seaplane_base');
+		assert.ok(s.startsWith('<svg'));
+		assert.notEqual(s, airportTypeIcon('large_airport'));
+		assert.notEqual(s, airportTypeIcon('heliport'));
+	});
+
+	it('returns empty string for unknown types', () => {
+		assert.equal(airportTypeIcon('balloonport'), '');
+		assert.equal(airportTypeIcon('future_type'), '');
+	});
+});
+
+describe('buildAirportPopupHtml', () => {
+	// Row shape: [ident, type, name, lat, lon, elev_ft, iso_country, municipality, iata]
+	it('renders ICAO, IATA, name, type, city, country and elevation', () => {
+		const html = buildAirportPopupHtml([
+			'LFPG', 'large_airport', 'Paris Charles de Gaulle',
+			49.01278, 2.55, 392, 'FR', 'Paris', 'CDG'
+		]);
+		assert.match(html, /LFPG/);
+		assert.match(html, /\(CDG\)/);
+		assert.match(html, /Paris Charles de Gaulle/);
+		assert.match(html, /Large airport/);
+		assert.match(html, /Paris, FR/);
+		assert.match(html, /392 ft/);
+		assert.match(html, /119 m/);
+	});
+
+	it('includes the type icon SVG in the title', () => {
+		const html = buildAirportPopupHtml([
+			'LFPG', 'large_airport', 'Paris CDG', 49, 2, null, 'FR', 'Paris', 'CDG'
+		]);
+		assert.match(html, /airport-popup-icon/);
+		assert.match(html, /<svg/);
+	});
+
+	it('omits the icon for types without a matching glyph', () => {
+		const html = buildAirportPopupHtml([
+			'BAL', 'balloonport', 'Example Balloonport',
+			1, 2, null, 'FR', 'City', ''
+		]);
+		assert.doesNotMatch(html, /airport-popup-icon/);
+	});
+
+	it('omits the IATA span when code is missing', () => {
+		const html = buildAirportPopupHtml([
+			'00A', 'heliport', 'Total RF Heliport',
+			40.07099, -74.93369, 11, 'US', 'Bensalem', ''
+		]);
+		assert.doesNotMatch(html, /airport-popup-iata/);
+	});
+
+	it('omits the elevation line when elevation is null', () => {
+		const html = buildAirportPopupHtml([
+			'X', 'small_airport', 'Example', 1, 2, null, 'FR', 'City', ''
+		]);
+		assert.doesNotMatch(html, /Elevation:/);
+	});
+
+	it('escapes unsafe characters in name and location', () => {
+		const html = buildAirportPopupHtml([
+			'HAX', 'small_airport', '<img src=x onerror="boom">',
+			0.1, 0.2, 10, 'XX', 'A & B', ''
+		]);
+		assert.doesNotMatch(html, /<img src=x/);
+		assert.match(html, /&lt;img src=x/);
+		assert.match(html, /A &amp; B/);
+	});
+
+	it('renders a runways table when runways are present', () => {
+		const runways = [
+			['08L', '26R', 13829, 148, 'ASP', 1],
+			['09R', '27L', 13780, 148, 'CON', 1]
+		];
+		const html = buildAirportPopupHtml([
+			'LFPG', 'large_airport', 'Paris CDG', 49, 2, 392, 'FR', 'Paris', 'CDG', runways
+		]);
+		assert.match(html, /airport-popup-runways/);
+		assert.match(html, /08L\/26R/);
+		assert.match(html, /09R\/27L/);
+		// 13829 ft ≈ 4215 m
+		assert.match(html, /4215/);
+		assert.match(html, /Asphalt/);
+		assert.match(html, /Concrete/);
+		assert.match(html, /Lit/);
+	});
+
+	it('omits the runways table when the array is empty', () => {
+		const html = buildAirportPopupHtml([
+			'LFPG', 'large_airport', 'Paris CDG', 49, 2, 392, 'FR', 'Paris', 'CDG', []
+		]);
+		assert.doesNotMatch(html, /airport-popup-runways/);
+	});
+
+	it('omits the runways table when the runways slot is missing', () => {
+		const html = buildAirportPopupHtml([
+			'LFPG', 'large_airport', 'Paris CDG', 49, 2, 392, 'FR', 'Paris', 'CDG'
+		]);
+		assert.doesNotMatch(html, /airport-popup-runways/);
+	});
+});
+
+describe('formatSurface', () => {
+	it('maps known asphalt variants to "Asphalt"', () => {
+		assert.equal(formatSurface('ASP'), 'Asphalt');
+		assert.equal(formatSurface('ASPH'), 'Asphalt');
+		assert.equal(formatSurface('ASPH-G'), 'Asphalt');
+	});
+
+	it('maps known grass variants to "Grass"', () => {
+		assert.equal(formatSurface('TURF'), 'Grass');
+		assert.equal(formatSurface('Grass'), 'Grass');
+		assert.equal(formatSurface('GRS'), 'Grass');
+	});
+
+	it('maps concrete variants', () => {
+		assert.equal(formatSurface('CON'), 'Concrete');
+		assert.equal(formatSurface('CONC'), 'Concrete');
+	});
+
+	it('returns empty string for empty/unknown-coded input', () => {
+		assert.equal(formatSurface(''), '');
+		assert.equal(formatSurface('UNK'), '');
+	});
+
+	it('falls back to the raw code for unrecognised surfaces', () => {
+		assert.equal(formatSurface('MYSTERYMAT'), 'MYSTERYMAT');
+	});
+});
+
+describe('buildRunwaysHtml', () => {
+	it('returns empty string for no runways', () => {
+		assert.equal(buildRunwaysHtml([]), '');
+		assert.equal(buildRunwaysHtml(null), '');
+		assert.equal(buildRunwaysHtml(undefined), '');
+	});
+
+	it('skips "Lit" marker for unlit runways', () => {
+		const html = buildRunwaysHtml([['04', '22', 3000, 75, 'TURF', 0]]);
+		assert.match(html, /Grass/);
+		assert.doesNotMatch(html, />Lit</);
+	});
+
+	it('renders length-only when width is missing', () => {
+		const html = buildRunwaysHtml([['09', '27', 4921, null, 'ASP', 1]]);
+		// 4921 ft ≈ 1500 m
+		assert.match(html, /1500 m/);
+		assert.doesNotMatch(html, /×/);
+	});
+
+	it('escapes unsafe runway designators and surface codes', () => {
+		const html = buildRunwaysHtml([['<x>', '</x>', 1000, 50, '<bad>', 1]]);
+		assert.doesNotMatch(html, /<x>/);
+		assert.match(html, /&lt;x&gt;/);
+	});
+});

@@ -67,7 +67,7 @@ const baseLayers = {
 	'Bing Aerial': bingAerial
 };
 
-L.control.layers(baseLayers, null, { position: 'topright' }).addTo(map);
+const layersControl = L.control.layers(baseLayers, {}, { position: 'topright' }).addTo(map);
 
 // Shared marker icon options
 const markerIconOptions = {
@@ -94,6 +94,16 @@ let markers = [];
 let activeRadiusCircle = null; // Current ephemeral radius circle (qualifier line, popup-bound)
 let polygons = []; // Polygons for area NOTAMs
 let radiusCircles = []; // Persistent radius circles for PSN NOTAMs
+
+// Airport overlay state. Kept strictly separate from `markers` so the touch
+// handler below never iterates 85k airport markers on every tap.
+let airportLayer = null;
+let airportLayersByType = null; // type -> L.layerGroup, toggled by zoom
+let airportData = null;
+let airportsLoadPromise = null;
+let airportsPopulated = false;
+let airportCanvasRenderer = null;
+let airportsLoadingControl = null;
 
 // On touch devices, when a tap misses a marker's DOM hit area (e.g. due to
 // rendering offset on Android), the tap falls through to the map background.
@@ -1597,6 +1607,290 @@ if (window.visualViewport) {
 	window.visualViewport.addEventListener('scroll', debouncedInvalidateSize);
 }
 
+// Airport overlay
+//
+// Data shape: `data/airports.json` is { fields, rows } where each row is an
+// array of values in the order declared by outputFields in
+// cmd/airports/build.go. We access fields by index to avoid rehydrating ~85k
+// rows into objects (saves ~40 MB of key-name overhead).
+const AIRPORT_IDX = {
+	IDENT: 0, TYPE: 1, NAME: 2, LAT: 3, LON: 4,
+	ELEV: 5, COUNTRY: 6, CITY: 7, IATA: 8, RUNWAYS: 9
+};
+
+const RUNWAY_IDX = {
+	LE: 0, HE: 1, LEN_FT: 2, WIDTH_FT: 3, SURFACE: 4, LIT: 5
+};
+
+// OurAirports surface codes are inconsistent (ASP / ASPH / ASPH-G / BIT all
+// mean asphalt; TURF / Turf / GRS / GRE / Grass all mean grass, etc.).
+// Normalise to a small set of human-readable labels.
+const SURFACE_LABELS = {
+	ASP: 'Asphalt', ASPH: 'Asphalt', 'ASPH-G': 'Asphalt', BIT: 'Bitumen', MAC: 'Macadam',
+	CON: 'Concrete', CONC: 'Concrete', PEM: 'Concrete',
+	TURF: 'Grass', 'TURF-G': 'Grass', GRS: 'Grass', GRE: 'Grass', GRA: 'Grass', GRASS: 'Grass',
+	GVL: 'Gravel', GRVL: 'Gravel',
+	WATER: 'Water', WTR: 'Water',
+	SNOW: 'Snow', ICE: 'Ice',
+	SAND: 'Sand', CORAL: 'Coral',
+	DIRT: 'Dirt', EARTH: 'Dirt',
+	UNK: '', UNKNOWN: ''
+};
+
+function formatSurface(raw) {
+	if (!raw) return '';
+	const up = String(raw).toUpperCase().trim();
+	if (SURFACE_LABELS[up] !== undefined) return SURFACE_LABELS[up];
+	if (up.startsWith('ASP')) return 'Asphalt';
+	if (up.startsWith('CON') || up.startsWith('PEM')) return 'Concrete';
+	if (up.startsWith('TURF') || up.startsWith('GRS') || up.startsWith('GRA') || up.startsWith('GRE')) return 'Grass';
+	if (up.startsWith('GVL') || up.startsWith('GRV')) return 'Gravel';
+	return raw;
+}
+
+function buildRunwaysHtml(runways) {
+	if (!runways || runways.length === 0) return '';
+	const rows = runways.map(r => {
+		const le = r[RUNWAY_IDX.LE];
+		const he = r[RUNWAY_IDX.HE];
+		const lenFt = r[RUNWAY_IDX.LEN_FT];
+		const widthFt = r[RUNWAY_IDX.WIDTH_FT];
+		const surface = formatSurface(r[RUNWAY_IDX.SURFACE]);
+		const lit = r[RUNWAY_IDX.LIT] === 1;
+
+		const designator = (le && he) ? `${le}/${he}` : (le || he || '');
+		let dimensions = '';
+		if (lenFt != null && widthFt != null) {
+			dimensions = `${Math.round(lenFt * 0.3048)} × ${Math.round(widthFt * 0.3048)} m`;
+		} else if (lenFt != null) {
+			dimensions = `${Math.round(lenFt * 0.3048)} m`;
+		}
+
+		return `<tr>
+			<td class="rw-ident">${escapeHtml(designator)}</td>
+			<td class="rw-dim">${escapeHtml(dimensions)}</td>
+			<td class="rw-surface">${escapeHtml(surface)}</td>
+			<td class="rw-lit">${lit ? 'Lit' : ''}</td>
+		</tr>`;
+	}).join('');
+	return `<table class="airport-popup-runways">
+		<thead><tr><th>Runway</th><th>Size</th><th>Surface</th><th></th></tr></thead>
+		<tbody>${rows}</tbody>
+	</table>`;
+}
+
+// Maki icons (https://github.com/mapbox/maki, CC0). Stripped of the width /
+// height attributes so the consumer can size them via CSS.
+const MAKI_AIRPORT_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 15 15" fill="currentColor"><path d="M15,6.8182L15,8.5l-6.5-1l-0.3182,4.7727L11,14v1l-3.5-0.6818L4,15v-1l2.8182-1.7273L6.5,7.5L0,8.5V6.8182L6.5,4.5v-3c0,0,0-1.5,1-1.5s1,1.5,1,1.5v2.8182L15,6.8182z"/></svg>';
+const MAKI_HELIPORT_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 15 15" fill="currentColor"><path d="M4,2C3,2,3,3,4,3h4v1C7.723,4,7.5,4.223,7.5,4.5V5H5H3.9707H3.9316C3.7041,4.1201,2.9122,3.5011,2,3.5c-1.1046,0-2,0.8954-2,2s0.8954,2,2,2c0.3722-0.001,0.7368-0.1058,1.0527-0.3027L5.5,10.5C6.5074,11.9505,8.3182,12,9,12h5c0,0,1,0,1-1v-0.9941C15,9.2734,14.874,8.874,14.5,8.5l-3-3c0,0-0.5916-0.5-1.2734-0.5H9.5V4.5C9.5,4.223,9.277,4,9,4V3h4c1,0,1-1,0-1C13,2,4,2,4,2z M2,4.5c0.5523,0,1,0.4477,1,1s-0.4477,1-1,1s-1-0.4477-1-1C1,4.9477,1.4477,4.5,2,4.5z M10,6c0.5,0,0.7896,0.3231,1,0.5L13.5,9H10c0,0-1,0-1-1V7C9,7,9,6,10,6z"/></svg>';
+const MAKI_HARBOR_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 15 15" fill="currentColor"><path d="M7.5,0C5.5,0,4,1.567,4,3.5c0.0024,1.5629,1.0397,2.902,2.5,3.3379v6.0391c-0.9305-0.1647-1.8755-0.5496-2.6484-1.2695C2.7992,10.6273,2.002,9.0676,2.002,6.498c0.0077-0.5646-0.4531-1.0236-1.0176-1.0137C0.4329,5.493-0.0076,5.9465,0,6.498c0,3.0029,1.0119,5.1955,2.4902,6.5723C3.9685,14.4471,5.8379,15,7.5,15c1.6656,0,3.535-0.5596,5.0117-1.9395S14.998,9.4868,14.998,6.498c0.0648-1.3953-2.0628-1.3953-1.998,0c0,2.553-0.7997,4.1149-1.8535,5.0996C10.3731,12.3203,9.4288,12.7084,8.5,12.875V6.8418C9.9607,6.4058,10.9986,5.0642,11,3.5C11,1.567,9.5,0,7.5,0z M7.5,2C8.3284,2,9,2.6716,9,3.5S8.3284,5,7.5,5S6,4.3284,6,3.5S6.6716,2,7.5,2z"/></svg>';
+
+function airportTypeIcon(type) {
+	switch (type) {
+	case 'large_airport':
+	case 'medium_airport':
+	case 'small_airport':
+		return MAKI_AIRPORT_SVG;
+	case 'heliport':
+		return MAKI_HELIPORT_SVG;
+	case 'seaplane_base':
+		return MAKI_HARBOR_SVG;
+	default:
+		return '';
+	}
+}
+
+const airportStyles = {
+	large_airport: { radius: 7, color: '#003d7a', fillColor: '#0066cc', fillOpacity: 0.9, weight: 1.5 },
+	medium_airport: { radius: 6, color: '#145591', fillColor: '#2288dd', fillOpacity: 0.9, weight: 1.5 },
+	small_airport: { radius: 5, color: '#2c6aa0', fillColor: '#66aadd', fillOpacity: 0.85, weight: 1.5 },
+	heliport: { radius: 5, color: '#802040', fillColor: '#cc3366', fillOpacity: 0.85, weight: 1.5 },
+	seaplane_base: { radius: 5, color: '#1e5e6a', fillColor: '#3399aa', fillOpacity: 0.85, weight: 1.5 },
+	balloonport: { radius: 5, color: '#805620', fillColor: '#cc8844', fillOpacity: 0.85, weight: 1.5 }
+};
+
+function airportStyleForType(type) {
+	return airportStyles[type] || airportStyles.small_airport;
+}
+
+function escapeHtml(s) {
+	if (s == null) return '';
+	return String(s)
+		.replace(/&/g, '&amp;')
+		.replace(/</g, '&lt;')
+		.replace(/>/g, '&gt;')
+		.replace(/"/g, '&quot;')
+		.replace(/'/g, '&#39;');
+}
+
+function prettyAirportType(type) {
+	const s = String(type).replace(/_/g, ' ');
+	return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function buildAirportPopupHtml(row) {
+	const ident = escapeHtml(row[AIRPORT_IDX.IDENT]);
+	const iata = row[AIRPORT_IDX.IATA];
+	const name = escapeHtml(row[AIRPORT_IDX.NAME]);
+	const type = row[AIRPORT_IDX.TYPE];
+	const country = row[AIRPORT_IDX.COUNTRY];
+	const city = row[AIRPORT_IDX.CITY];
+	const elev = row[AIRPORT_IDX.ELEV];
+
+	const iataHtml = iata
+		? ` <span class="airport-popup-iata">(${escapeHtml(iata)})</span>`
+		: '';
+
+	const iconSvg = airportTypeIcon(type);
+	const iconColor = airportStyleForType(type).fillColor;
+	const iconHtml = iconSvg
+		? `<span class="airport-popup-icon" style="color:${iconColor}">${iconSvg}</span>`
+		: '';
+
+	const loc = [city, country].filter(Boolean).join(', ');
+	const metaParts = [escapeHtml(prettyAirportType(type))];
+	if (loc) metaParts.push(escapeHtml(loc));
+
+	const elevHtml = (typeof elev === 'number')
+		? `<div class="airport-popup-elev">Elevation: ${elev} ft (${Math.round(elev * 0.3048)} m)</div>`
+		: '';
+
+	const runwaysHtml = buildRunwaysHtml(row[AIRPORT_IDX.RUNWAYS]);
+
+	return `<div class="airport-popup">
+		<div class="airport-popup-title">${iconHtml}${ident}${iataHtml}</div>
+		<div class="airport-popup-name">${name}</div>
+		<div class="airport-popup-meta">${metaParts.join(' · ')}</div>
+		${elevHtml}
+		${runwaysHtml}
+	</div>`;
+}
+
+// Pane for airport dots, below Leaflet's default markerPane (z-index 600)
+// so NOTAM markers always sit on top.
+function createAirportPane() {
+	if (map.getPane('airports')) return;
+	map.createPane('airports');
+	map.getPane('airports').style.zIndex = 400;
+}
+
+function updateAirportsPaneVisibility() {
+	const pane = map.getPane('airports');
+	if (pane) pane.style.display = map.getZoom() <= 3 ? 'none' : '';
+}
+
+// Each airport type only renders at this zoom level or higher. Tighter
+// thresholds at low zoom keep the map readable without resorting to clusters.
+const AIRPORT_TYPE_MIN_ZOOM = {
+	large_airport: 5,
+	medium_airport: 6,
+	small_airport: 8,
+	heliport: 11,
+	seaplane_base: 11,
+	balloonport: 11
+};
+
+function buildAirportLayersByType(data) {
+	if (!airportCanvasRenderer) {
+		airportCanvasRenderer = L.canvas({ pane: 'airports' });
+	}
+	const byType = {};
+	for (const type of Object.keys(AIRPORT_TYPE_MIN_ZOOM)) {
+		byType[type] = L.layerGroup();
+	}
+	for (const row of data.rows) {
+		const group = byType[row[AIRPORT_IDX.TYPE]];
+		if (!group) continue; // skips 'closed' and any unknown types
+		const cm = L.circleMarker([row[AIRPORT_IDX.LAT], row[AIRPORT_IDX.LON]], {
+			renderer: airportCanvasRenderer,
+			pane: 'airports',
+			...airportStyleForType(row[AIRPORT_IDX.TYPE])
+		});
+		cm.bindPopup(() => buildAirportPopupHtml(row), POPUP_OPTIONS);
+		group.addLayer(cm);
+	}
+	return byType;
+}
+
+// Reconcile which per-type airport layers are on the map for the current zoom.
+function refreshAirportTypeVisibility() {
+	if (!airportLayersByType || !airportLayer || !map.hasLayer(airportLayer)) return;
+	const zoom = map.getZoom();
+	for (const [type, group] of Object.entries(airportLayersByType)) {
+		const shouldShow = zoom >= AIRPORT_TYPE_MIN_ZOOM[type];
+		const isShown = airportLayer.hasLayer(group);
+		if (shouldShow && !isShown) airportLayer.addLayer(group);
+		else if (!shouldShow && isShown) airportLayer.removeLayer(group);
+	}
+}
+
+async function ensureAirportsLoaded() {
+	if (airportData) return airportData;
+	if (airportsLoadPromise) return airportsLoadPromise;
+	airportsLoadPromise = (async () => {
+		const res = await fetch('data/airports.json');
+		if (!res.ok) throw new Error('HTTP ' + res.status);
+		const data = await res.json();
+		airportData = data;
+		return data;
+	})();
+	airportsLoadPromise.catch(() => { airportsLoadPromise = null; });
+	return airportsLoadPromise;
+}
+
+function showAirportsLoading() {
+	if (airportsLoadingControl) return;
+	const Ctl = L.Control.extend({
+		onAdd() {
+			const div = L.DomUtil.create('div', 'airport-loading-control');
+			div.textContent = 'Loading airports…';
+			return div;
+		}
+	});
+	airportsLoadingControl = new Ctl({ position: 'bottomleft' });
+	airportsLoadingControl.addTo(map);
+}
+
+function hideAirportsLoading() {
+	if (airportsLoadingControl) {
+		airportsLoadingControl.remove();
+		airportsLoadingControl = null;
+	}
+}
+
+async function onAirportOverlayAdd(e) {
+	if (e.layer !== airportLayer) return;
+	if (!airportsPopulated) {
+		try {
+			showAirportsLoading();
+			const data = await ensureAirportsLoaded();
+			airportLayersByType = buildAirportLayersByType(data);
+			airportsPopulated = true;
+		} catch (err) {
+			console.error('Could not load airports:', err);
+			alert('Could not load airports data.');
+			return;
+		} finally {
+			hideAirportsLoading();
+		}
+	}
+	refreshAirportTypeVisibility();
+}
+
+function setupAirportOverlay() {
+	createAirportPane();
+	updateAirportsPaneVisibility();
+	map.on('zoomend', () => {
+		updateAirportsPaneVisibility();
+		refreshAirportTypeVisibility();
+	});
+
+	airportLayer = L.layerGroup();
+	const overlayLabel = `<span class="airports-overlay-label">${MAKI_AIRPORT_SVG} Airports</span>`;
+	layersControl.addOverlay(airportLayer, overlayLabel);
+	map.on('overlayadd', onAirportOverlayAdd);
+}
+
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
 	document.getElementById('parseBtn').addEventListener('click', parseAndDisplay);
@@ -1605,6 +1899,8 @@ document.addEventListener('DOMContentLoaded', () => {
 	document.getElementById('fileInput').addEventListener('change', handleFileUpload);
 	document.getElementById('pasteBtn').addEventListener('click', pasteFromClipboard);
 	document.getElementById('clearBtn').addEventListener('click', clearAll);
+
+	setupAirportOverlay();
 
 	const urlParam = new URLSearchParams(window.location.search).get('file');
 	if (urlParam) {

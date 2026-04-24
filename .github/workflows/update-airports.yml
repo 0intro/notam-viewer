@@ -1,0 +1,37 @@
+name: Update airports
+
+on:
+  schedule:
+    - cron: '0 3 1 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.26'
+
+      - name: Build airports.json
+        working-directory: cmd/airports
+        run: go run .
+
+      - name: Commit if changed
+        run: |
+          if git diff --quiet -- data/airports.json; then
+            echo "No data changes."
+          else
+            git config user.name 'github-actions[bot]'
+            git config user.email 'github-actions[bot]@users.noreply.github.com'
+            git add data/airports.json data/airports.meta.json
+            git commit -m "update airports data"
+            git push
+          fi

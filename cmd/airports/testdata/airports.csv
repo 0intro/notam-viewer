@@ -1,0 +1,8 @@
+id,ident,type,name,latitude_deg,longitude_deg,elevation_ft,continent,iso_country,iso_region,municipality,scheduled_service,icao_code,iata_code,gps_code,local_code,home_link,wikipedia_link,keywords
+1,LFPG,large_airport,Paris Charles de Gaulle International Airport,49.01278,2.55,392,EU,FR,FR-IDF,"Paris (Roissy-en-France, Val-d'Oise)",yes,LFPG,CDG,LFPG,CDG,,,
+2,LFPO,large_airport,Paris-Orly Airport,48.7233,2.3794,291,EU,FR,FR-IDF,Paris,yes,LFPO,ORY,LFPO,ORY,,,
+3,LFML,large_airport,Marseille Provence Airport,43.4393,5.2214,74,EU,FR,FR-PAC,Marseille,yes,LFML,MRS,LFML,MRS,,,
+4,LFLY,medium_airport,Lyon-Bron Airport,45.7271,4.9444,659,EU,FR,FR-ARA,Lyon,no,LFLY,LYN,LFLY,LYN,,,
+5,LFFG,small_airport,Aerodrome de La Ferte-Gaucher,48.7567,3.2611,512,EU,FR,FR-IDF,La Ferte-Gaucher,no,LFFG,,LFFG,LFFG,,,
+6,FR-0001,small_airport,(Duplicate)Aerodrome de Doublon,46.5,4.5,500,EU,FR,FR-ARA,Doublon,no,LFXY,,,,,,,
+7,FR-0234,small_airport,Private ULM Strip,46.5,4.2,800,EU,FR,FR-ARA,Nowhere,no,,,,,,,,

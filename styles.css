@@ -456,6 +456,108 @@ button:hover {
 	margin-right: 8px;
 }
 
+.airport-popup {
+	font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+	min-width: 200px;
+}
+
+.airport-popup-title {
+	font-weight: bold;
+	color: #06c;
+	font-size: 1.1em;
+	margin-bottom: 3px;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.airport-popup-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.airport-popup-icon svg {
+	display: block;
+	width: 14px;
+	height: 14px;
+}
+
+.airports-overlay-label {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	color: #06c;
+}
+
+.airports-overlay-label svg {
+	display: block;
+	width: 12px;
+	height: 12px;
+}
+
+.airport-popup-iata {
+	color: #666;
+	font-weight: normal;
+	font-size: 0.9em;
+}
+
+.airport-popup-name {
+	font-size: 13px;
+	color: #222;
+	margin-bottom: 4px;
+}
+
+.airport-popup-meta,
+.airport-popup-elev {
+	font-size: 11px;
+	color: #666;
+}
+
+.airport-popup-runways {
+	margin-top: 6px;
+	border-collapse: collapse;
+	font-size: 11px;
+	width: 100%;
+}
+
+.airport-popup-runways th {
+	text-align: left;
+	color: #666;
+	font-weight: normal;
+	border-bottom: 1px solid #ddd;
+	padding: 2px 8px 2px 0;
+}
+
+.airport-popup-runways td {
+	padding: 2px 8px 2px 0;
+	vertical-align: top;
+}
+
+.airport-popup-runways .rw-ident {
+	font-family: 'Courier New', monospace;
+	font-weight: bold;
+	white-space: nowrap;
+}
+
+.airport-popup-runways .rw-dim {
+	white-space: nowrap;
+}
+
+.airport-popup-runways .rw-lit {
+	color: #888;
+	font-size: 10px;
+}
+
+.airport-loading-control {
+	background: white;
+	padding: 6px 10px;
+	border-radius: 4px;
+	box-shadow: 0 1px 4px rgb(0 0 0 / 20%);
+	font-size: 12px;
+	color: #333;
+}
+
 .statistics {
 	margin-top: 15px;
 	padding: 10px;
