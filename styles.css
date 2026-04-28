@@ -135,6 +135,14 @@ button:hover {
 	background: #5a6268;
 }
 
+.paste-btn {
+	background: #17a2b8;
+}
+
+.paste-btn:hover {
+	background: #138496;
+}
+
 .checkbox-label {
 	display: flex;
 	align-items: center;

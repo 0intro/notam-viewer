@@ -1212,6 +1212,25 @@ async function handleFileUpload(event) {
 	event.target.value = '';
 }
 
+async function pasteFromClipboard() {
+	const textarea = document.getElementById('notamInput');
+	textarea.focus();
+	if (!navigator.clipboard || !navigator.clipboard.readText) {
+		return;
+	}
+	try {
+		const text = await navigator.clipboard.readText();
+		if (text) {
+			textarea.value = text;
+		}
+	} catch (error) {
+		if (error.name === 'DataError' || error.name === 'NotAllowedError') {
+			return;
+		}
+		console.error('Could not read clipboard:', error);
+	}
+}
+
 // Clear all content
 function clearAll() {
 	document.getElementById('notamInput').value = '';
@@ -1346,6 +1365,7 @@ document.addEventListener('DOMContentLoaded', () => {
 	document.getElementById('printBtn').addEventListener('click', printMapToPdf);
 	document.getElementById('fullscreenBtn').addEventListener('click', toggleFullscreen);
 	document.getElementById('fileInput').addEventListener('change', handleFileUpload);
+	document.getElementById('pasteBtn').addEventListener('click', pasteFromClipboard);
 	document.getElementById('clearBtn').addEventListener('click', clearAll);
 
 	const urlParam = new URLSearchParams(window.location.search).get('file');
