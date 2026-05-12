@@ -91,8 +91,9 @@ const blueIcon = L.icon({
 });
 
 let markers = [];
-let activeRadiusCircle = null; // Current radius circle on map
+let activeRadiusCircle = null; // Current ephemeral radius circle (qualifier line, popup-bound)
 let polygons = []; // Polygons for area NOTAMs
+let radiusCircles = []; // Persistent radius circles for PSN NOTAMs
 
 // On touch devices, when a tap misses a marker's DOM hit area (e.g. due to
 // rendering offset on Android), the tap falls through to the map background.
@@ -661,12 +662,14 @@ function parseNotams(text) {
 	return notams;
 }
 
-// Clear existing markers, polygons and radius circle
+// Clear existing markers, polygons and radius circles
 function clearMarkers() {
 	markers.forEach(marker => map.removeLayer(marker));
 	markers = [];
 	polygons.forEach(polygon => map.removeLayer(polygon));
 	polygons = [];
+	radiusCircles.forEach(circle => map.removeLayer(circle));
+	radiusCircles = [];
 	if (activeRadiusCircle) {
 		map.removeLayer(activeRadiusCircle);
 		activeRadiusCircle = null;
@@ -750,21 +753,25 @@ const polygonHighlightStyle = {
 	fillOpacity: 0.4
 };
 
-// Show radius circle for a location (radius in NM)
-function showRadiusCircle(lat, lon, radiusNM, color) {
-	if (activeRadiusCircle) {
-		map.removeLayer(activeRadiusCircle);
-	}
-	const radiusMeters = radiusNM * NM_TO_METERS;
-	const circleColor = color || '#0078d4';
-	activeRadiusCircle = L.circle([lat, lon], {
-		radius: radiusMeters,
-		color: circleColor,
-		fillColor: circleColor,
+// Build a radius circle (radius in NM) and add it to the map.
+// Non-interactive so clicks pass through to underlying polygons (and to the
+// marker pin which lives in the higher-z markerPane).
+function makeRadiusCircle(lat, lon, radiusNM, color) {
+	return L.circle([lat, lon], {
+		radius: radiusNM * NM_TO_METERS,
+		color: color,
+		fillColor: color,
 		fillOpacity: 0.15,
 		weight: 2,
+		interactive: false,
 		renderer: canvasRenderer
 	}).addTo(map);
+}
+
+// Show an ephemeral radius circle (used for qualifier-line markers on popup open)
+function showRadiusCircle(lat, lon, radiusNM, color) {
+	hideRadiusCircle();
+	activeRadiusCircle = makeRadiusCircle(lat, lon, radiusNM, color || '#0078d4');
 }
 
 // Hide radius circle
@@ -932,10 +939,11 @@ function setupMarkerEvents(marker, group, navInfo, markerMap) {
 	const { groupIndex, totalAtLocation, hasMultipleAtLocation, groupsAtLocation } = navInfo;
 
 	marker.on('popupopen', () => {
-		if (group.radius) {
+		// PSN radius circles are persistent (drawn alongside the marker);
+		// only qualifier-line circles are ephemeral and shown here.
+		if (group.radius && group.hasQualifierLine) {
 			const nm = radiusToNM(group.radius, group.radiusUnit || 'NM');
-			const color = group.hasQualifierLine ? '#0078d4' : '#ff7800';
-			showRadiusCircle(group.lat, group.lon, nm, color);
+			showRadiusCircle(group.lat, group.lon, nm, '#0078d4');
 		}
 
 		if (hasMultipleAtLocation) {
@@ -1160,6 +1168,18 @@ function parseAndDisplay() {
 		markers.push(marker);
 		bounds.push([group.lat, group.lon]);
 		markerMap.set(key, marker);
+
+		// Draw a persistent radius circle for PSN NOTAMs with a radius.
+		// Qualifier-line circles stay ephemeral (drawn on popup open) since their
+		// radii are coarse Q-line estimates, not operational zones.
+		if (group.radius && !group.hasQualifierLine) {
+			const nm = radiusToNM(group.radius, group.radiusUnit || 'NM');
+			const circle = makeRadiusCircle(group.lat, group.lon, nm, '#ff7800');
+			radiusCircles.push(circle);
+			const cb = circle.getBounds();
+			bounds.push([cb.getNorth(), cb.getEast()]);
+			bounds.push([cb.getSouth(), cb.getWest()]);
+		}
 
 		const li = document.createElement('li');
 		li.innerHTML = buildListItemHtml(group, posIndex);
