@@ -17,12 +17,12 @@
   "author": "David du Colombier",
   "license": "MIT",
   "devDependencies": {
-    "@eslint/js": "^9.39.2",
-    "@stylistic/stylelint-plugin": "^5.0.1",
-    "eslint": "^9.39.2",
-    "globals": "^17.3.0",
-    "htmlhint": "^1.8.0",
-    "stylelint": "^17.1.1",
+    "@eslint/js": "^10.0.1",
+    "@stylistic/stylelint-plugin": "^5.1.0",
+    "eslint": "^10.3.0",
+    "globals": "^17.6.0",
+    "htmlhint": "^1.9.2",
+    "stylelint": "^17.11.0",
     "stylelint-config-standard": "^40.0.0"
   }
 }
