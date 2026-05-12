@@ -504,12 +504,12 @@ describe('parseNotams - areas', () => {
 	const notams = parseNotams(areasText);
 
 	it('should parse all area NOTAMs', () => {
-		assert.equal(notams.length, 26);
+		assert.equal(notams.length, 31);
 	});
 
 	it('should mark area NOTAMs as polygons', () => {
 		const polygons = notams.filter(n => n.isPolygon);
-		assert.equal(polygons.length, 17);
+		assert.equal(polygons.length, 22);
 	});
 
 	it('should parse LIMITES LATERALES keyword (LFFA-R2339/25)', () => {
@@ -644,6 +644,20 @@ describe('parseNotams - areas', () => {
 		}
 	});
 
+	it('should rejoin wrapped polygon coords and split into per-PART polygons (F0212/26)', () => {
+		const entries = notams.filter(n => n.id === 'F0212/26');
+		assert.equal(entries.length, 5);
+		for (const e of entries) assert.equal(e.isPolygon, true);
+		// First polygon (BORDEAUX R1 PART 2): 16 source coords with first == last
+		// → 15 unique vertices. First vertex is 470240N 0001500W.
+		assert.equal(entries[0].coordinates.length, 15);
+		assertNear(entries[0].coordinates[0].lat, 47.0444, 'first PART lat');
+		assertNear(entries[0].coordinates[0].lon, -0.25, 'first PART lon');
+		// Last polygon (BREST NS PART 1): 16 vertices with first == last → 15.
+		assert.equal(entries[4].coordinates.length, 15);
+		assertNear(entries[4].coordinates[0].lat, 48.4622, 'last PART first lat');
+	});
+
 	it('should parse dash-connected polygon without an area keyword (R3154/25)', () => {
 		const n = findNotam(notams, 'R3154/25');
 		assert.ok(n);
@@ -684,18 +698,18 @@ describe('parseNotams - areas', () => {
 // Integration tests: statistics
 
 const statisticsTests = [
-	{ file: 'Europe-20260203.txt', all: 10814, noPosition: 7263, positions: 2559, areas: 992 },
+	{ file: 'Europe-20260203.txt', all: 10830, noPosition: 7263, positions: 2560, areas: 1007 },
 	{ file: 'LPPT-EPWA-20260207.txt', all: 975, noPosition: 403, positions: 451, areas: 121 },
-	{ file: 'EGPD-LFKC-20260207.txt', all: 674, noPosition: 228, positions: 405, areas: 41 },
+	{ file: 'EGPD-LFKC-20260207.txt', all: 676, noPosition: 228, positions: 406, areas: 42 },
 	{ file: 'KJFK-KLAX-20260209.txt', all: 449, noPosition: 355, positions: 93, areas: 1 },
 	{ file: 'CYQB-CYVR-20260209.txt', all: 366, noPosition: 121, positions: 243, areas: 2 },
 	{ file: 'CYTZ-SAWG-20260209.txt', all: 552, noPosition: 375, positions: 161, areas: 16 },
-	{ file: 'EGLL-FACT-20260209.txt', all: 756, noPosition: 384, positions: 323, areas: 49 },
-	{ file: 'ENGM-YSCB-20260209.txt', all: 519, noPosition: 269, positions: 160, areas: 90 },
-	{ file: 'LEMD-UHWW-20260209.txt', all: 1431, noPosition: 597, positions: 654, areas: 180 },
-	{ file: 'LSHJ-ZBAA-20260209.txt', all: 1336, noPosition: 474, positions: 753, areas: 109 },
+	{ file: 'EGLL-FACT-20260209.txt', all: 758, noPosition: 384, positions: 325, areas: 49 },
+	{ file: 'ENGM-YSCB-20260209.txt', all: 520, noPosition: 269, positions: 160, areas: 91 },
+	{ file: 'LEMD-UHWW-20260209.txt', all: 1433, noPosition: 597, positions: 655, areas: 181 },
+	{ file: 'LSHJ-ZBAA-20260209.txt', all: 1337, noPosition: 474, positions: 754, areas: 109 },
 	{ file: 'SBBE-VIDP-20260209.txt', all: 310, noPosition: 264, positions: 24, areas: 22 },
-	{ file: 'World-20260207.txt', all: 36474, noPosition: 26345, positions: 6588, areas: 3541 },
+	{ file: 'World-20260207.txt', all: 36547, noPosition: 26345, positions: 6606, areas: 3596 },
 ];
 
 // NOTAMs to be investigated: coordinates far from Q-line due to

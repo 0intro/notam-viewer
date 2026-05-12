@@ -307,6 +307,23 @@ function parseDMSCoordinate(coordStr) {
 	return { lat, lon };
 }
 
+// Join lines that split a DMS coordinate across a wrap. French SUP AIP
+// trigger NOTAMs (e.g. F0212/26) write polygons as `470240N,0001500W-...`
+// and wrap at column ~80, mid-coordinate (e.g. `...0005707E-4\n55300N,...`).
+// We rejoin only when:
+//   * the digits before `\n` are immediately preceded by `-` (a polygon
+//     separator — the strong signal that we're inside a coord run, not
+//     prose that happens to end in a digit), AND
+//   * the digits after `\n` form a complete `<digits>[NS]` followed by
+//     `,<digits>[EW]` (a lat/lon pair), AND
+//   * the joined digits are a plausible DMS latitude (4-7 digits + NS).
+function rejoinSplitCoordLines(text) {
+	return text.replace(
+		/(-\d{0,6})\n(\d{1,7}[NS])(\s*[,\s]\s*\d{4,8}[EW])/g,
+		(m, a, b, c) => /^\d{4,7}[NS]$/.test(a.slice(1) + b) ? a + b + c : m
+	);
+}
+
 // Clean up NOTAM content - normalize whitespace while preserving structure
 function cleanNotamContent(content) {
 	return content
@@ -470,7 +487,7 @@ function parseNotams(text) {
 		const seenPositions = new Set(); // Track positions to deduplicate
 
 		const dates = parseNotamDates(sections, content);
-		const eContent = sections.E || null;
+		const eContent = sections.E ? rejoinSplitCoordLines(sections.E) : null;
 
 		const coordinateGroups = [];
 
@@ -510,9 +527,6 @@ function parseNotams(text) {
 				const coordPattern = /(\d{4,7}(?:\.\d+)?)([NS])(?:\s+|\s*,\s*)(\d{5,8}(?:\.\d+)?)([EW])|(\d{6})([NS])(\d{7})([EW])/gi;
 				let match;
 				let groupClosed = false;
-				// Coarse positions (~111m) from closed groups, used to skip
-				// approximate duplicates (e.g. high-precision vs standard coords)
-				const closedGroupPositions = new Set();
 
 				while ((match = coordPattern.exec(eContent)) !== null) {
 					const coordStr = match[1]
@@ -552,20 +566,11 @@ function parseNotams(text) {
 
 					// Create position key for deduplication (rounded to ~1m precision)
 					const posKey = `${coords.lat.toFixed(6)}_${coords.lon.toFixed(6)}`;
-					const coarsePosKey = `${coords.lat.toFixed(3)}_${coords.lon.toFixed(3)}`;
-
-					// Skip coordinates that approximately match a closed group
-					if (closedGroupPositions.has(coarsePosKey)) {
-						continue;
-					}
 
 					if (seenPositions.has(posKey)) {
 						// Duplicate coordinate signals polygon closure
 						if (!groupClosed && coordinates.length > 0) {
 							coordinateGroups.push([...coordinates]);
-							for (const coord of coordinates) {
-								closedGroupPositions.add(`${coord.lat.toFixed(3)}_${coord.lon.toFixed(3)}`);
-							}
 							coordinates.length = 0;
 							seenPositions.clear();
 							groupClosed = true;
@@ -602,6 +607,32 @@ function parseNotams(text) {
 			} else {
 				coordinateGroups.push(coordinates);
 			}
+		}
+
+		// Drop polygon-shaped groups whose coord sequence is coarsely
+		// identical to an earlier group — catches LOWW-A3153/25 that lists
+		// the same polygon a second time as a "STRAIGHT LINE DEFINED BY" at
+		// a different precision. Only polygon-shaped groups (length >= 3)
+		// are candidates; standalone PSN markers for nearby obstacles
+		// (e.g. P0320/26's 17 trees) are kept even when their coarse
+		// positions collide.
+		if (coordinateGroups.length > 1) {
+			const keyOf = c => `${c.lat.toFixed(3)}_${c.lon.toFixed(3)}`;
+			const seqOf = g => g.map(keyOf).join('|');
+			const seenSeqs = new Set();
+			const filtered = [];
+			for (const group of coordinateGroups) {
+				if (group.length < 3) {
+					filtered.push(group);
+					continue;
+				}
+				const seq = seqOf(group);
+				if (seenSeqs.has(seq)) continue;
+				seenSeqs.add(seq);
+				filtered.push(group);
+			}
+			coordinateGroups.length = 0;
+			coordinateGroups.push(...filtered);
 		}
 
 		// Find qualifier line coordinates only if no PSN coordinates found
