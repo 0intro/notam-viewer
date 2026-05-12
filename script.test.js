@@ -314,7 +314,7 @@ describe('parseNotams - positions', () => {
 	const notams = parseNotams(positionsText);
 
 	it('should parse all position NOTAMs', () => {
-		assert.equal(notams.length, 20);
+		assert.equal(notams.length, 22);
 	});
 
 	it('should not mark any position NOTAM as polygon', () => {
@@ -421,6 +421,27 @@ describe('parseNotams - positions', () => {
 		assertNear(n.coordinates[0].lon, 16.035, 'lon');
 		assert.equal(n.coordinates[0].radius, 500);
 		assert.equal(n.coordinates[0].radiusUnit, 'M');
+	});
+
+	it('should parse preamble "DANS UN RAYON DE X AUTOUR DU PSN" (P0389/26)', () => {
+		const n = findNotam(notams, 'P0389/26');
+		assert.ok(n);
+		assert.equal(n.isPolygon, false);
+		assert.equal(n.coordinates[0].type, 'psn');
+		assertNear(n.coordinates[0].lat, 43.6506, 'lat');
+		assertNear(n.coordinates[0].lon, 1.35, 'lon');
+		assert.equal(n.coordinates[0].radius, 96);
+		assert.equal(n.coordinates[0].radiusUnit, 'M');
+	});
+
+	it('should parse bullet-list "- RAYON: X" on line below coord (P0994/26)', () => {
+		const n = findNotam(notams, 'P0994/26');
+		assert.ok(n);
+		assert.equal(n.coordinates[0].type, 'psn');
+		assertNear(n.coordinates[0].lat, 47.4228, 'lat');
+		assertNear(n.coordinates[0].lon, -1.184, 'lon');
+		assert.equal(n.coordinates[0].radius, 5);
+		assert.equal(n.coordinates[0].radiusUnit, 'KM');
 	});
 
 	it('should parse French DANS UN RAYON DE after PSN (LFFA-W2279/25)', () => {

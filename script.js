@@ -368,13 +368,18 @@ function extractRadiusFromText(eContent, matchStart, matchEnd) {
 		};
 	}
 
-	// French: " [DANS UN ]RAYON [:|DE] <num><unit>" after coord
-	// (e.g. "PSN <coord>\nRAYON : 5NM" or "PSN <coord> DANS UN RAYON DE 5NM")
-	const afterMatchFr = afterText.match(/^\s+(?:DANS\s+UN\s+)?RAYON\s*(?::|DE\s+)\s*(\d+(?:[.,]\d+)?)\s*(NM|KM|M)\b/i);
+	// French: " [- ]?[DANS UN ]?RAYON [:|DE] <num><unit>" after coord.
+	// Examples:
+	//   "PSN <coord>\nRAYON : 5NM"
+	//   "PSN <coord> DANS UN RAYON DE 5NM"
+	//   "- PSN : <coord>\n- RAYON: 5KM"        (bullet-list, P0994/26)
+	const afterMatchFr = afterText.match(/^\s+[-*]?\s*(?:DANS\s+(?:UN\s+)?)?RAYON\s*(?::|DE\s+)\s*(\d+(?:[.,]\d+)?)\s*(NM|KM|METRES?|M)\b/i);
 	if (afterMatchFr) {
+		let unit = afterMatchFr[2].toUpperCase();
+		if (unit === 'METRES' || unit === 'METRE') unit = 'M';
 		return {
 			radius: parseFloat(afterMatchFr[1].replace(',', '.')),
-			radiusUnit: afterMatchFr[2].toUpperCase()
+			radiusUnit: unit
 		};
 	}
 
@@ -415,6 +420,21 @@ function extractRadiusFromText(eContent, matchStart, matchEnd) {
 		return {
 			radius: parseFloat(beforeMatch4[1].replace(',', '.')),
 			radiusUnit: beforeMatch4[2].toUpperCase()
+		};
+	}
+
+	// Fallback: French obstacle NOTAMs (P0389/26, P0881/26, ...) put the
+	// radius in the E-section preamble (`GRUE MOBILE DANS UN RAYON DE 96M
+	// AUTOUR DU PSN ...`) with the actual coord on a separate "- PSN : ..."
+	// line beyond the local 50-char window. The "AUTOUR" suffix anchors this
+	// to a single PSN, so applying it across the NOTAM is safe.
+	const preamble = eContent.match(/\bDANS\s+(?:UN\s+)?RAYON\s+(?:DE\s+)?(\d+(?:[.,]\d+)?)\s*(NM|KM|METRES?|M)\s+AUTOUR\b/i);
+	if (preamble) {
+		let unit = preamble[2].toUpperCase();
+		if (unit === 'METRES' || unit === 'METRE') unit = 'M';
+		return {
+			radius: parseFloat(preamble[1].replace(',', '.')),
+			radiusUnit: unit
 		};
 	}
 
