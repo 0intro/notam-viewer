@@ -339,6 +339,16 @@ function extractRadiusFromText(eContent, matchStart, matchEnd) {
 		};
 	}
 
+	// French: " [DANS UN ]RAYON [:|DE] <num><unit>" after coord
+	// (e.g. "PSN <coord>\nRAYON : 5NM" or "PSN <coord> DANS UN RAYON DE 5NM")
+	const afterMatchFr = afterText.match(/^\s+(?:DANS\s+UN\s+)?RAYON\s*(?::|DE\s+)\s*(\d+(?:[.,]\d+)?)\s*(NM|KM|M)\b/i);
+	if (afterMatchFr) {
+		return {
+			radius: parseFloat(afterMatchFr[1].replace(',', '.')),
+			radiusUnit: afterMatchFr[2].toUpperCase()
+		};
+	}
+
 	// Look before the coordinate (up to 50 chars)
 	const beforeText = eContent.substring(Math.max(0, matchStart - 50), matchStart);
 
@@ -357,6 +367,25 @@ function extractRadiusFromText(eContent, matchStart, matchEnd) {
 		return {
 			radius: parseFloat(beforeMatch2[1].replace(',', '.')),
 			radiusUnit: beforeMatch2[2].toUpperCase()
+		};
+	}
+
+	// French: "<num><unit> DE RAYON" (e.g. "CERCLE DE 1NM DE RAYON CENTRE SUR PSN")
+	const beforeMatch3 = beforeText.match(/(\d+(?:[.,]\d+)?)\s*(NM|KM|M)\s+DE\s+RAYON\b/i);
+	if (beforeMatch3) {
+		return {
+			radius: parseFloat(beforeMatch3[1].replace(',', '.')),
+			radiusUnit: beforeMatch3[2].toUpperCase()
+		};
+	}
+
+	// French: "RAYON DE <num><unit>" / "RAYON : <num><unit>"
+	// Separator (DE or :) required to avoid matching "RAYON LASER 3M" etc.
+	const beforeMatch4 = beforeText.match(/\bRAYON\s*(?::|DE\s+)\s*(\d+(?:[.,]\d+)?)\s*(NM|KM|M)\b/i);
+	if (beforeMatch4) {
+		return {
+			radius: parseFloat(beforeMatch4[1].replace(',', '.')),
+			radiusUnit: beforeMatch4[2].toUpperCase()
 		};
 	}
 

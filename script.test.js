@@ -243,6 +243,45 @@ describe('extractRadiusFromText', () => {
 		const r = extractRadiusFromText(text, 4, 20);
 		assert.equal(r, null);
 	});
+
+	it('should extract French DE RAYON before coordinates', () => {
+		const text = 'CERCLE DE 1NM DE RAYON CENTRE SUR PSN 482807N 0023803E';
+		// "482807N 0023803E" starts at 38, length 16
+		const r = extractRadiusFromText(text, 38, 54);
+		assert.equal(r.radius, 1);
+		assert.equal(r.radiusUnit, 'NM');
+	});
+
+	it('should extract French decimal DE RAYON before coordinates', () => {
+		const text = 'CERCLE DE 0.2NM DE RAYON CENTRE SUR PSN : 434524N 0065513E';
+		// "434524N 0065513E" starts at 42, length 16
+		const r = extractRadiusFromText(text, 42, 58);
+		assert.equal(r.radius, 0.2);
+		assert.equal(r.radiusUnit, 'NM');
+	});
+
+	it('should extract French RAYON : after coordinates', () => {
+		const text = 'PSN : 461043N 0064212E\nRAYON : 5NM\nRDL091/18NM LFLI';
+		// "461043N 0064212E" starts at 6, length 16
+		const r = extractRadiusFromText(text, 6, 22);
+		assert.equal(r.radius, 5);
+		assert.equal(r.radiusUnit, 'NM');
+	});
+
+	it('should extract French DANS UN RAYON DE after coordinates', () => {
+		const text = 'PSN : 461620N 0065012E DANS UN RAYON DE 5NM\nRDL046/18NM';
+		// "461620N 0065012E" starts at 6, length 16
+		const r = extractRadiusFromText(text, 6, 22);
+		assert.equal(r.radius, 5);
+		assert.equal(r.radiusUnit, 'NM');
+	});
+
+	it('should not match RAYON without a separator (e.g. RAYON LASER)', () => {
+		const text = 'EMISSION RAYON LASER 3M PSN 482807N 0023803E';
+		// "482807N 0023803E" starts at 28, length 16
+		const r = extractRadiusFromText(text, 28, 44);
+		assert.equal(r, null);
+	});
 });
 
 describe('radiusToNM', () => {
@@ -265,7 +304,7 @@ describe('parseNotams - positions', () => {
 	const notams = parseNotams(positionsText);
 
 	it('should parse all position NOTAMs', () => {
-		assert.equal(notams.length, 17);
+		assert.equal(notams.length, 19);
 	});
 
 	it('should not mark any position NOTAM as polygon', () => {
@@ -372,6 +411,30 @@ describe('parseNotams - positions', () => {
 		assertNear(n.coordinates[0].lon, 16.035, 'lon');
 		assert.equal(n.coordinates[0].radius, 500);
 		assert.equal(n.coordinates[0].radiusUnit, 'M');
+	});
+
+	it('should parse French DANS UN RAYON DE after PSN (LFFA-W2279/25)', () => {
+		const n = findNotam(notams, 'LFFA-W2279/25');
+		assert.ok(n);
+		assert.equal(n.isPolygon, false);
+		assert.equal(n.coordinates.length, 1);
+		assert.equal(n.coordinates[0].type, 'psn');
+		assertNear(n.coordinates[0].lat, 46.2722, 'lat');
+		assertNear(n.coordinates[0].lon, 6.8367, 'lon');
+		assert.equal(n.coordinates[0].radius, 5);
+		assert.equal(n.coordinates[0].radiusUnit, 'NM');
+	});
+
+	it('should parse French CERCLE DE X DE RAYON CENTRE SUR PSN (LFFA-R1463/26)', () => {
+		const n = findNotam(notams, 'LFFA-R1463/26');
+		assert.ok(n);
+		assert.equal(n.isPolygon, false);
+		assert.equal(n.coordinates.length, 1);
+		assert.equal(n.coordinates[0].type, 'psn');
+		assertNear(n.coordinates[0].lat, 48.4686, 'lat');
+		assertNear(n.coordinates[0].lon, 2.6342, 'lon');
+		assert.equal(n.coordinates[0].radius, 1);
+		assert.equal(n.coordinates[0].radiusUnit, 'NM');
 	});
 
 	it('should parse high-precision decimal seconds (LFFA-P4304/25)', () => {
