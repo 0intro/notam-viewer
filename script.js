@@ -663,6 +663,7 @@ function parseNotams(text) {
 							coord.radius = radiusInfo.radius;
 							coord.radiusUnit = radiusInfo.radiusUnit;
 						}
+						tagArcCenter(coord, eContent, match.index);
 						coordinates.push(coord);
 					}
 				}
@@ -760,9 +761,10 @@ function parseNotams(text) {
 				isPolygon = hasAreaKeywords || hasClosingCoord || (hasDashConnectedCoords && groupCoords.length >= 4) || isClosed;
 			}
 
-			const finalCoords = isPolygon && isSelfIntersecting(groupCoords)
+			let finalCoords = isPolygon && isSelfIntersecting(groupCoords)
 				? makeSimplePolygon(groupCoords) : groupCoords;
 			if (isPolygon) {
+				finalCoords = expandArcs(finalCoords);
 				normalizePolygonLongitudes(finalCoords);
 			}
 			notams.push({
@@ -841,6 +843,73 @@ function computePolygonArea(coordinates) {
 		area -= coordinates[j].lat * coordinates[i].lon;
 	}
 	return Math.abs(area) / 2;
+}
+
+// Mark a coord as an arc center if it's immediately preceded in the E section
+// by "ARC HORAIRE DE <num><unit> DE RAYON CENTRE [SUR]" (French clockwise-arc
+// notation). The center point isn't actually on the polygon boundary — the
+// adjacent polygon vertices sit on the arc itself — so on finalization we
+// replace the center with sampled arc points via expandArcs().
+function tagArcCenter(coord, eContent, matchIndex) {
+	const before = eContent.substring(Math.max(0, matchIndex - 100), matchIndex);
+	const m = before.match(/\bARC\s+HORAIRE\s+DE\s+(\d+(?:[.,]\d+)?)\s*(NM|KM|METRES?|M)\s+DE\s+RAYON\s+CENTRE[E]?\s+SUR[\s,]*$/i);
+	if (!m) return;
+	let unit = m[2].toUpperCase();
+	if (unit === 'METRES' || unit === 'METRE') unit = 'M';
+	coord.arcRadius = parseFloat(m[1].replace(',', '.'));
+	coord.arcRadiusUnit = unit;
+	// The center isn't a position to draw a circle around; clear any radius
+	// the local "X DE RAYON" pattern may have attached.
+	delete coord.radius;
+	delete coord.radiusUnit;
+}
+
+// Sample K-1 intermediate points along the clockwise arc from `prev` to `next`,
+// centered on `center` with the given radius. Endpoints are not duplicated —
+// they're already in the polygon coord list. Planar approximation, fine at
+// the few-NM scale of French ZRT arcs.
+function sampleArcPoints(prev, center, next, radius, unit) {
+	const r = radius * (unit === 'NM' ? NM_TO_METERS : unit === 'KM' ? 1000 : 1);
+	const M_PER_DEG = 111320;
+	const cosLat = Math.cos(center.lat * Math.PI / 180);
+	const t1 = Math.atan2(prev.lat - center.lat, (prev.lon - center.lon) * cosLat);
+	const t2 = Math.atan2(next.lat - center.lat, (next.lon - center.lon) * cosLat);
+	// HORAIRE = clockwise. atan2 is CCW-positive, so a clockwise sweep is
+	// modeled as a positive (t1 - t2) wrapping into (0, 2π].
+	let sweep = t1 - t2;
+	while (sweep <= 0) sweep += 2 * Math.PI;
+	const k = 16;
+	const out = [];
+	for (let i = 1; i < k; i++) {
+		const angle = t1 - sweep * (i / k);
+		out.push({
+			original: 'arc',
+			lat: center.lat + Math.sin(angle) * r / M_PER_DEG,
+			lon: center.lon + Math.cos(angle) * r / (cosLat * M_PER_DEG),
+			type: 'psn'
+		});
+	}
+	return out;
+}
+
+// Replace any arc-center coord in a polygon vertex list with sampled arc
+// points. For closed polygons the prev/next of the first/last arc-center
+// wraps around through the closure.
+function expandArcs(coords) {
+	if (!coords.some(c => c.arcRadius != null)) return coords;
+	const n = coords.length;
+	const out = [];
+	for (let i = 0; i < n; i++) {
+		const c = coords[i];
+		if (c.arcRadius == null) {
+			out.push(c);
+			continue;
+		}
+		const prev = coords[(i - 1 + n) % n];
+		const next = coords[(i + 1) % n];
+		out.push(...sampleArcPoints(prev, c, next, c.arcRadius, c.arcRadiusUnit));
+	}
+	return out;
 }
 
 // Normalize polygon longitudes so consecutive vertices never jump more than 180°.

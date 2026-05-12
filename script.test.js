@@ -575,12 +575,12 @@ describe('parseNotams - areas', () => {
 	const notams = parseNotams(areasText);
 
 	it('should parse all area NOTAMs', () => {
-		assert.equal(notams.length, 31);
+		assert.equal(notams.length, 32);
 	});
 
 	it('should mark area NOTAMs as polygons', () => {
 		const polygons = notams.filter(n => n.isPolygon);
-		assert.equal(polygons.length, 22);
+		assert.equal(polygons.length, 23);
 	});
 
 	it('should parse LIMITES LATERALES keyword (LFFA-R2339/25)', () => {
@@ -737,6 +737,24 @@ describe('parseNotams - areas', () => {
 		assert.equal(n.coordinates.length, 33);
 		assertNear(n.coordinates[0].lat, 45.9058, 'first lat');
 		assertNear(n.coordinates[0].lon, -1.6636, 'first lon');
+	});
+
+	it('should expand ARC HORAIRE arc center into curved sample points (R1129/26)', () => {
+		const n = findNotam(notams, 'R1129/26');
+		assert.ok(n);
+		assert.equal(n.isPolygon, true);
+		// Source: v1, arc-center, v3, v4-closing (== v1). Closure drops v4 and
+		// the arc center is expanded into k-1 = 15 sample points.
+		assert.equal(n.coordinates.length, 2 + 15);
+		// First and last source vertices are preserved
+		assertNear(n.coordinates[0].lat, 49.1311, 'v1 lat');
+		assertNear(n.coordinates[0].lon, 4.3742, 'v1 lon');
+		assertNear(n.coordinates[n.coordinates.length - 1].lat, 49.1361, 'v3 lat');
+		// Sample points sweep clockwise from v1 to v3 — going south first
+		// (atan2 CCW-positive, HORAIRE = decreasing angle), so the first
+		// intermediate sample has lower lat than v1.
+		assert.ok(n.coordinates[1].lat < n.coordinates[0].lat,
+			'first arc sample should be south of v1');
 	});
 
 	it('should make simple polygon from self-intersecting coords (EBBR-F0162/26)', () => {
