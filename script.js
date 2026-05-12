@@ -327,6 +327,9 @@ const areaTranslations = [
 ];
 const areaKeywordsPattern = new RegExp('\\b(' + lateralLimitsTranslations.join('|') + '|' + areaTranslations.join('|') + '|WI\\s+COORD|FLW\\s+COORDS)\\b', 'i');
 const areaExclusionPattern = /\bRESTRICTED\s+IN\s+AREA\b/i;
+// Two full DMS coords joined by a dash. lat/lon may be separated by whitespace
+// or by a comma (French SUP AIP format like `470240N,0001500W`).
+const dashConnectedCoordsPattern = /\d{4,7}[NS](?:\s+|\s*,\s*)\d{5,8}[EW]\s*[-]\s*\d{4,7}[NS](?:\s+|\s*,\s*)\d{5,8}[EW]/i;
 
 // Extract radius info from text surrounding a coordinate match in the E) section
 function extractRadiusFromText(eContent, matchStart, matchEnd) {
@@ -478,9 +481,13 @@ function parseNotams(text) {
 			const hasObstKeyword = /\bOBST\b/i.test(eContent);
 			const hasObstQCode = sections.Q && /\/\s*QOB/.test(sections.Q);
 			const hasAreaKeywords = areaKeywordsPattern.test(eContent) && !areaExclusionPattern.test(eContent);
+			// Two full DMS coords joined by a dash is itself a strong polygon
+			// signal — catches French SUP AIP triggers like R3154/25 that just
+			// list "coord - coord - coord - ..." without an explicit keyword.
+			const hasDashConnectedCoords = dashConnectedCoordsPattern.test(eContent);
 
-			// Only extract coordinates if PSN, CENTRE/CENTER, OBST, obstruction Q-code, or area keywords are present
-			if (hasPsnKeyword || hasCentreKeyword || hasObstKeyword || hasObstQCode || hasAreaKeywords) {
+			// Only extract coordinates if PSN, CENTRE/CENTER, OBST, obstruction Q-code, area keywords, or a dash-coord-chain are present
+			if (hasPsnKeyword || hasCentreKeyword || hasObstKeyword || hasObstQCode || hasAreaKeywords || hasDashConnectedCoords) {
 				// When area keywords are present, find the first keyword
 				// directly followed by coordinates; non-PSN coordinates
 				// before it are skipped
@@ -498,8 +505,9 @@ function parseNotams(text) {
 				}
 
 				// Find all coordinate-like patterns in the E) section
-				// Matches patterns like: 422726N 0064355W, 4227N 00643W or 455554.997N 0060439.322E
-				const coordPattern = /(\d{4,7}(?:\.\d+)?)([NS])\s+(\d{5,8}(?:\.\d+)?)([EW])|(\d{6})([NS])(\d{7})([EW])/gi;
+				// Matches patterns like: 422726N 0064355W, 4227N 00643W, 455554.997N 0060439.322E,
+				// or comma-joined 470240N,0001500W (French SUP AIP polygons).
+				const coordPattern = /(\d{4,7}(?:\.\d+)?)([NS])(?:\s+|\s*,\s*)(\d{5,8}(?:\.\d+)?)([EW])|(\d{6})([NS])(\d{7})([EW])/gi;
 				let match;
 				let groupClosed = false;
 				// Coarse positions (~111m) from closed groups, used to skip
@@ -631,7 +639,7 @@ function parseNotams(text) {
 				const hasClosingCoord = /\(\s*\d{4,7}\s*[NS]\s+\d{5,8}\s*[EW]\s*\)/i.test(eContent);
 
 				// Check if multiple coordinates are connected by dashes (typical area pattern)
-				const hasDashConnectedCoords = /\d{4,7}[NS]\s+\d{5,8}[EW]\s*[-]\s*\d{4,7}[NS]\s+\d{5,8}[EW]/i.test(eContent);
+				const hasDashConnectedCoords = dashConnectedCoordsPattern.test(eContent);
 
 				// Also check if first and last coords in array are same (in case no parentheses used)
 				const firstCoord = groupCoords[0];

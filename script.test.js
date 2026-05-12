@@ -504,12 +504,12 @@ describe('parseNotams - areas', () => {
 	const notams = parseNotams(areasText);
 
 	it('should parse all area NOTAMs', () => {
-		assert.equal(notams.length, 25);
+		assert.equal(notams.length, 26);
 	});
 
 	it('should mark area NOTAMs as polygons', () => {
 		const polygons = notams.filter(n => n.isPolygon);
-		assert.equal(polygons.length, 16);
+		assert.equal(polygons.length, 17);
 	});
 
 	it('should parse LIMITES LATERALES keyword (LFFA-R2339/25)', () => {
@@ -644,6 +644,16 @@ describe('parseNotams - areas', () => {
 		}
 	});
 
+	it('should parse dash-connected polygon without an area keyword (R3154/25)', () => {
+		const n = findNotam(notams, 'R3154/25');
+		assert.ok(n);
+		assert.equal(n.isPolygon, true);
+		// 34 source coords with first == last; closure pushes the 33 unique.
+		assert.equal(n.coordinates.length, 33);
+		assertNear(n.coordinates[0].lat, 45.9058, 'first lat');
+		assertNear(n.coordinates[0].lon, -1.6636, 'first lon');
+	});
+
 	it('should make simple polygon from self-intersecting coords (EBBR-F0162/26)', () => {
 		const n = findNotam(notams, 'EBBR-F0162/26');
 		assert.ok(n);
@@ -674,18 +684,18 @@ describe('parseNotams - areas', () => {
 // Integration tests: statistics
 
 const statisticsTests = [
-	{ file: 'Europe-20260203.txt', all: 10814, noPosition: 7282, positions: 2550, areas: 982 },
-	{ file: 'LPPT-EPWA-20260207.txt', all: 975, noPosition: 410, positions: 448, areas: 117 },
+	{ file: 'Europe-20260203.txt', all: 10814, noPosition: 7263, positions: 2559, areas: 992 },
+	{ file: 'LPPT-EPWA-20260207.txt', all: 975, noPosition: 403, positions: 451, areas: 121 },
 	{ file: 'EGPD-LFKC-20260207.txt', all: 674, noPosition: 228, positions: 405, areas: 41 },
 	{ file: 'KJFK-KLAX-20260209.txt', all: 449, noPosition: 355, positions: 93, areas: 1 },
-	{ file: 'CYQB-CYVR-20260209.txt', all: 366, noPosition: 122, positions: 242, areas: 2 },
+	{ file: 'CYQB-CYVR-20260209.txt', all: 366, noPosition: 121, positions: 243, areas: 2 },
 	{ file: 'CYTZ-SAWG-20260209.txt', all: 552, noPosition: 375, positions: 161, areas: 16 },
-	{ file: 'EGLL-FACT-20260209.txt', all: 756, noPosition: 388, positions: 320, areas: 48 },
-	{ file: 'ENGM-YSCB-20260209.txt', all: 519, noPosition: 281, positions: 160, areas: 78 },
-	{ file: 'LEMD-UHWW-20260209.txt', all: 1431, noPosition: 605, positions: 650, areas: 176 },
-	{ file: 'LSHJ-ZBAA-20260209.txt', all: 1336, noPosition: 475, positions: 753, areas: 108 },
+	{ file: 'EGLL-FACT-20260209.txt', all: 756, noPosition: 384, positions: 323, areas: 49 },
+	{ file: 'ENGM-YSCB-20260209.txt', all: 519, noPosition: 269, positions: 160, areas: 90 },
+	{ file: 'LEMD-UHWW-20260209.txt', all: 1431, noPosition: 597, positions: 654, areas: 180 },
+	{ file: 'LSHJ-ZBAA-20260209.txt', all: 1336, noPosition: 474, positions: 753, areas: 109 },
 	{ file: 'SBBE-VIDP-20260209.txt', all: 310, noPosition: 264, positions: 24, areas: 22 },
-	{ file: 'World-20260207.txt', all: 36465, noPosition: 26418, positions: 6567, areas: 3480 },
+	{ file: 'World-20260207.txt', all: 36474, noPosition: 26345, positions: 6588, areas: 3541 },
 ];
 
 // NOTAMs to be investigated: coordinates far from Q-line due to
@@ -722,6 +732,8 @@ const coordinateExclusions = new Set([
 	'RJAA-P0495/26',  // arc centre 102NM from Q-centre, Q-radius 66NM
 	// Base of operations far from survey area
 	'VIDP-A0122/26',  // base at Shahpura 35NM from Q-centre, Q-radius 13NM
+	// Malformed source coords (DMS minutes/seconds > 60)
+	'WMKK-A0016/26',  // E section lists "027437N, 1016897E" (74' minutes invalid)
 ]);
 
 function assertCoordinatesNearQualifierLine(notams, maxDist) {
