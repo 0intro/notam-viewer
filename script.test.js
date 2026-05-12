@@ -111,6 +111,16 @@ describe('parseNotamDates', () => {
 		assert.equal(d.estimated, false);
 	});
 
+	it('should parse legacy YYMMDDHHMM B/C dates', () => {
+		const content = 'Q) LTAA/QWMLW/IV/BO/W/000/080/3750N03038E002\nA) LTAA B) 2605110500 C) 2605201500\nE) TEST';
+		const sections = parseSections(content);
+		const d = parseNotamDates(sections, content);
+		assert.equal(d.start.getTime(), Date.UTC(2026, 4, 11, 5, 0));
+		assert.equal(d.end.getTime(), Date.UTC(2026, 4, 20, 15, 0));
+		assert.equal(d.permanent, false);
+		assert.equal(d.estimated, false);
+	});
+
 	it('should parse SOFIA DU/AU dates', () => {
 		const content = 'DU: 20 01 2025 07:32 AU: 30 04 2026 19:02\nA) LFFF\nQ) LFFF / QWULW / IV / BO / W / 000/014 / 4840N00305E005\nE) TEST';
 		const sections = parseSections(content);

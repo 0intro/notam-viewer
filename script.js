@@ -139,7 +139,7 @@ function formatDMS(lat, lon) {
 }
 
 // Parse NOTAM validity dates from B)/C) sections or SOFIA-Briefing DU/AU line
-// B)/C) format: 2026-02-24 00:00
+// B)/C) format: 2026-02-24 00:00 or 2602240000 (legacy YYMMDDHHMM, 20YY assumed)
 // DU/AU format: DU: 29 12 2025 16:06 AU: 30 06 2026 23:59 EST
 function parseNotamDates(sections, content) {
 	let start = null;
@@ -147,12 +147,16 @@ function parseNotamDates(sections, content) {
 	let permanent = false;
 	let estimated = false;
 
-	// Try B) and C) sections first (ICAO format: YYYY-MM-DD HH:MM)
+	const parseBCDate = (str) => {
+		let m = str.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);
+		if (m) return new Date(Date.UTC(+m[1], m[2] - 1, +m[3], +m[4], +m[5]));
+		m = str.match(/\b(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})\b/);
+		if (m) return new Date(Date.UTC(2000 + +m[1], m[2] - 1, +m[3], +m[4], +m[5]));
+		return null;
+	};
+
 	if (sections.B) {
-		const m = sections.B.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);
-		if (m) {
-			start = new Date(Date.UTC(+m[1], m[2] - 1, +m[3], +m[4], +m[5]));
-		}
+		start = parseBCDate(sections.B);
 	}
 	if (sections.C) {
 		if (/\bPERM\b/i.test(sections.C)) {
@@ -160,10 +164,7 @@ function parseNotamDates(sections, content) {
 		} else {
 			const cStr = sections.C.replace(/\s*\bEST\b/i, '');
 			if (cStr !== sections.C) estimated = true;
-			const m = cStr.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);
-			if (m) {
-				end = new Date(Date.UTC(+m[1], m[2] - 1, +m[3], +m[4], +m[5]));
-			}
+			end = parseBCDate(cStr);
 		}
 	}
 
