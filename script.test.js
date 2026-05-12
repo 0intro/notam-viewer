@@ -314,7 +314,7 @@ describe('parseNotams - positions', () => {
 	const notams = parseNotams(positionsText);
 
 	it('should parse all position NOTAMs', () => {
-		assert.equal(notams.length, 22);
+		assert.equal(notams.length, 23);
 	});
 
 	it('should not mark any position NOTAM as polygon', () => {
@@ -419,6 +419,18 @@ describe('parseNotams - positions', () => {
 		assert.equal(n.coordinates[0].type, 'psn');
 		assertNear(n.coordinates[0].lat, 40.8864, 'lat');
 		assertNear(n.coordinates[0].lon, 16.035, 'lon');
+		assert.equal(n.coordinates[0].radius, 500);
+		assert.equal(n.coordinates[0].radiusUnit, 'M');
+	});
+
+	it('should parse CENTREE keyword + RAYON D\'EVOLUTION DE elision (W0004/26)', () => {
+		const n = findNotam(notams, 'W0004/26');
+		assert.ok(n);
+		assert.equal(n.isPolygon, false);
+		assert.equal(n.coordinates.length, 1);
+		assert.equal(n.coordinates[0].type, 'psn');
+		assertNear(n.coordinates[0].lat, 45.5139, 'lat');
+		assertNear(n.coordinates[0].lon, 3.2669, 'lon');
 		assert.equal(n.coordinates[0].radius, 500);
 		assert.equal(n.coordinates[0].radiusUnit, 'M');
 	});
@@ -735,9 +747,9 @@ const statisticsTests = [
 	{ file: 'KJFK-KLAX-20260209.txt', all: 449, noPosition: 355, positions: 93, areas: 1 },
 	{ file: 'CYQB-CYVR-20260209.txt', all: 366, noPosition: 121, positions: 243, areas: 2 },
 	{ file: 'CYTZ-SAWG-20260209.txt', all: 552, noPosition: 375, positions: 161, areas: 16 },
-	{ file: 'EGLL-FACT-20260209.txt', all: 758, noPosition: 384, positions: 325, areas: 49 },
+	{ file: 'EGLL-FACT-20260209.txt', all: 758, noPosition: 383, positions: 326, areas: 49 },
 	{ file: 'ENGM-YSCB-20260209.txt', all: 520, noPosition: 269, positions: 160, areas: 91 },
-	{ file: 'LEMD-UHWW-20260209.txt', all: 1433, noPosition: 597, positions: 655, areas: 181 },
+	{ file: 'LEMD-UHWW-20260209.txt', all: 1433, noPosition: 596, positions: 656, areas: 181 },
 	{ file: 'LSHJ-ZBAA-20260209.txt', all: 1337, noPosition: 474, positions: 754, areas: 109 },
 	{ file: 'SBBE-VIDP-20260209.txt', all: 310, noPosition: 264, positions: 24, areas: 22 },
 	{ file: 'World-20260207.txt', all: 36547, noPosition: 26345, positions: 6606, areas: 3596 },

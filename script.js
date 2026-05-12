@@ -383,6 +383,18 @@ function extractRadiusFromText(eContent, matchStart, matchEnd) {
 		};
 	}
 
+	// French elision: "RAYON D'<WORD> DE <num><unit>" after coord
+	// (e.g. W0004/26 "CENTREE SUR <coord> AVEC UN RAYON D'EVOLUTION DE 500M").
+	const afterMatchElision = afterText.match(/^\s+(?:AVEC\s+(?:UN\s+)?)?RAYON\s+D['][A-Z]+\s+DE\s+(\d+(?:[.,]\d+)?)\s*(NM|KM|METRES?|M)\b/i);
+	if (afterMatchElision) {
+		let unit = afterMatchElision[2].toUpperCase();
+		if (unit === 'METRES' || unit === 'METRE') unit = 'M';
+		return {
+			radius: parseFloat(afterMatchElision[1].replace(',', '.')),
+			radiusUnit: unit
+		};
+	}
+
 	// Look before the coordinate (up to 50 chars)
 	const beforeText = eContent.substring(Math.max(0, matchStart - 50), matchStart);
 
@@ -515,7 +527,9 @@ function parseNotams(text) {
 		if (eContent) {
 			// Check for position or area keywords
 			const hasPsnKeyword = /\bPSN\b/i.test(eContent);
-			const hasCentreKeyword = /\bCENTR(?:ED?|ER(?:ED)?)\b/i.test(eContent);
+			// CENTRE/CENTRED/CENTREE/CENTER/CENTERED — CENTREE is the French
+			// feminine past participle used in NOTAMs like W0004/26.
+			const hasCentreKeyword = /\bCENTR(?:EE?D?|ER(?:ED)?)\b/i.test(eContent);
 			const hasObstKeyword = /\bOBST\b/i.test(eContent);
 			const hasObstQCode = sections.Q && /\/\s*QOB/.test(sections.Q);
 			const hasAreaKeywords = areaKeywordsPattern.test(eContent) && !areaExclusionPattern.test(eContent);
