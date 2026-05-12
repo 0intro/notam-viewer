@@ -330,13 +330,20 @@ const areaExclusionPattern = /\bRESTRICTED\s+IN\s+AREA\b/i;
 
 // Extract radius info from text surrounding a coordinate match in the E) section
 function extractRadiusFromText(eContent, matchStart, matchEnd) {
-	// Look after the coordinate: "RADIUS <num><unit>"
+	// Look after the coordinate: "RADIUS <num><unit>" or "[WITH] <num><unit> RADIUS"
 	const afterText = eContent.substring(matchEnd, matchEnd + 50);
 	const afterMatch = afterText.match(/^\s+RADIUS\s+(\d+(?:[.,]\d+)?)\s*(NM|KM|M)\b/i);
 	if (afterMatch) {
 		return {
 			radius: parseFloat(afterMatch[1].replace(',', '.')),
 			radiusUnit: afterMatch[2].toUpperCase()
+		};
+	}
+	const afterMatch2 = afterText.match(/^\s+(?:WITH\s+)?(\d+(?:[.,]\d+)?)\s*(NM|KM|M)\s+RADIUS\b/i);
+	if (afterMatch2) {
+		return {
+			radius: parseFloat(afterMatch2[1].replace(',', '.')),
+			radiusUnit: afterMatch2[2].toUpperCase()
 		};
 	}
 

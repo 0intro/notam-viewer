@@ -304,7 +304,7 @@ describe('parseNotams - positions', () => {
 	const notams = parseNotams(positionsText);
 
 	it('should parse all position NOTAMs', () => {
-		assert.equal(notams.length, 19);
+		assert.equal(notams.length, 20);
 	});
 
 	it('should not mark any position NOTAM as polygon', () => {
@@ -471,6 +471,17 @@ describe('parseNotams - positions', () => {
 		assert.equal(n.coordinates[0].type, 'psn');
 		assertNear(n.coordinates[0].lat, 45.9531, 'lat');
 		assertNear(n.coordinates[0].lon, 6.1261, 'lon');
+	});
+
+	it('should parse WITH <num><unit> RADIUS after COORD (LRBB-C1981/26)', () => {
+		const n = findNotam(notams, 'LRBB-C1981/26');
+		assert.ok(n);
+		assert.equal(n.coordinates.length, 1);
+		assert.equal(n.coordinates[0].type, 'psn');
+		assertNear(n.coordinates[0].lat, 46.5025, 'lat');
+		assertNear(n.coordinates[0].lon, 23.8861, 'lon');
+		assert.equal(n.coordinates[0].radius, 6);
+		assert.equal(n.coordinates[0].radiusUnit, 'NM');
 	});
 
 	it('should parse multiple NOTAMs at same position (LEAN-R0225/26, LEAN-R0226/26)', () => {
