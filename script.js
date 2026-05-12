@@ -476,6 +476,18 @@ function extractRadiusFromText(eContent, matchStart, matchEnd) {
 		};
 	}
 
+	// Diameter (helipad FATO circles in H-prefixed NOTAMs). Half it to get
+	// the equivalent radius; the resulting circle has the documented extent.
+	const diameter = eContent.match(/\bDIAMETRE\s*(?::|DE\s+)?\s*(\d+(?:[.,]\d+)?)\s*(NM|KM|METRES?|M)\b/i);
+	if (diameter) {
+		let unit = diameter[2].toUpperCase();
+		if (unit === 'METRES' || unit === 'METRE') unit = 'M';
+		return {
+			radius: parseFloat(diameter[1].replace(',', '.')) / 2,
+			radiusUnit: unit
+		};
+	}
+
 	return null;
 }
 
@@ -584,8 +596,9 @@ function parseNotams(text) {
 
 				// Find all coordinate-like patterns in the E) section
 				// Matches patterns like: 422726N 0064355W, 4227N 00643W, 455554.997N 0060439.322E,
-				// or comma-joined 470240N,0001500W (French SUP AIP polygons).
-				const coordPattern = /(\d{4,7}(?:\.\d+)?)([NS])(?:\s+|\s*,\s*)(\d{5,8}(?:\.\d+)?)([EW])|(\d{6})([NS])(\d{7})([EW])/gi;
+				// or comma-joined 470240N,0001500W (French SUP AIP polygons),
+				// or dash-joined 452552N - 0065936E (helipad FATO style, H0141/26).
+				const coordPattern = /(\d{4,7}(?:\.\d+)?)([NS])(?:\s+|\s*[,-]\s*)(\d{5,8}(?:\.\d+)?)([EW])|(\d{6})([NS])(\d{7})([EW])/gi;
 				let match;
 				let groupClosed = false;
 
