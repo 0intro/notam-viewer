@@ -395,6 +395,19 @@ function extractRadiusFromText(eContent, matchStart, matchEnd) {
 		};
 	}
 
+	// French: "RAYON <num><unit>" with no separator (W0227/26, W0470/26).
+	// `\s+\d` ensures a digit comes immediately after the whitespace,
+	// so "RAYON LASER 3M" / "RAYON ENERGIE ..." still don't match.
+	const afterMatchBare = afterText.match(/^[\s,]+(?:DANS\s+)?RAYON\s+(\d+(?:[.,]\d+)?)\s*(NM|KM|METRES?|M)\b/i);
+	if (afterMatchBare) {
+		let unit = afterMatchBare[2].toUpperCase();
+		if (unit === 'METRES' || unit === 'METRE') unit = 'M';
+		return {
+			radius: parseFloat(afterMatchBare[1].replace(',', '.')),
+			radiusUnit: unit
+		};
+	}
+
 	// Look before the coordinate (up to 50 chars)
 	const beforeText = eContent.substring(Math.max(0, matchStart - 50), matchStart);
 
@@ -432,6 +445,19 @@ function extractRadiusFromText(eContent, matchStart, matchEnd) {
 		return {
 			radius: parseFloat(beforeMatch4[1].replace(',', '.')),
 			radiusUnit: beforeMatch4[2].toUpperCase()
+		};
+	}
+
+	// French: "RAYON <num><unit>" with no separator (W0520/26, P1757/26).
+	// `\s+\d` ensures a digit comes immediately after the whitespace,
+	// excluding "RAYON LASER 3M" / "RAYON ENERGIE ..." prose.
+	const beforeMatch5 = beforeText.match(/\bRAYON\s+(\d+(?:[.,]\d+)?)\s*(NM|KM|METRES?|M)\b/i);
+	if (beforeMatch5) {
+		let unit = beforeMatch5[2].toUpperCase();
+		if (unit === 'METRES' || unit === 'METRE') unit = 'M';
+		return {
+			radius: parseFloat(beforeMatch5[1].replace(',', '.')),
+			radiusUnit: unit
 		};
 	}
 

@@ -314,7 +314,7 @@ describe('parseNotams - positions', () => {
 	const notams = parseNotams(positionsText);
 
 	it('should parse all position NOTAMs', () => {
-		assert.equal(notams.length, 23);
+		assert.equal(notams.length, 25);
 	});
 
 	it('should not mark any position NOTAM as polygon', () => {
@@ -420,6 +420,22 @@ describe('parseNotams - positions', () => {
 		assertNear(n.coordinates[0].lat, 40.8864, 'lat');
 		assertNear(n.coordinates[0].lon, 16.035, 'lon');
 		assert.equal(n.coordinates[0].radius, 500);
+		assert.equal(n.coordinates[0].radiusUnit, 'M');
+	});
+
+	it('should parse bare "DANS RAYON X<unit>" before coord (P1757/26)', () => {
+		const n = findNotam(notams, 'P1757/26');
+		assert.ok(n);
+		assert.equal(n.coordinates[0].type, 'psn');
+		assert.equal(n.coordinates[0].radius, 50);
+		assert.equal(n.coordinates[0].radiusUnit, 'M');
+	});
+
+	it('should parse bare "RAYON X<unit>" after coord (W0470/26)', () => {
+		const n = findNotam(notams, 'W0470/26');
+		assert.ok(n);
+		assert.equal(n.coordinates[0].type, 'psn');
+		assert.equal(n.coordinates[0].radius, 2000);
 		assert.equal(n.coordinates[0].radiusUnit, 'M');
 	});
 
