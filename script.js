@@ -515,6 +515,346 @@ function radiusToNM(radius, unit) {
 // Display unit with correct casing (SI: m, km; aviation: NM)
 const radiusUnitDisplay = { NM: 'NM', KM: 'km', M: 'm' };
 
+// ICAO Doc 8126 § 5.1 subject codes (second and third letters of the Q-code).
+const Q_SUBJECTS = {
+	AA: 'Minimum altitude',
+	AC: 'Class B, C, D or E surface area',
+	AD: 'Air defence identification zone',
+	AE: 'Control area',
+	AF: 'Flight information region',
+	AH: 'Upper control area',
+	AL: 'Minimum usable flight level',
+	AN: 'Area navigation route',
+	AO: 'Oceanic control area',
+	AP: 'Reporting point',
+	AR: 'ATS route',
+	AT: 'Terminal control area',
+	AU: 'Upper flight information region',
+	AV: 'Upper advisory area',
+	AX: 'Intersection',
+	AZ: 'Aerodrome traffic zone',
+	BU: 'Bird/wildlife hazard',
+	CA: 'Air/ground facility',
+	CB: 'Automatic dependent surveillance — broadcast',
+	CC: 'Automatic dependent surveillance — contract',
+	CD: 'Controller-pilot data link communications',
+	CE: 'En route surveillance radar',
+	CG: 'Ground controlled approach system',
+	CL: 'Selective calling system',
+	CM: 'Surface movement radar',
+	CP: 'Precision approach radar',
+	CR: 'Surveillance radar',
+	CS: 'Secondary surveillance radar',
+	CT: 'Terminal area surveillance radar',
+	EB: 'Obstacle lights',
+	FA: 'Aerodrome',
+	FB: 'Friction measuring device',
+	FC: 'Ceiling measurement equipment',
+	FD: 'Docking system',
+	FE: 'Oxygen',
+	FF: 'Firefighting and rescue',
+	FG: 'Ground movement control',
+	FH: 'Helicopter alighting area or platform',
+	FI: 'Aircraft de-icing',
+	FJ: 'Oils',
+	FL: 'Landing direction indicator',
+	FM: 'Meteorological service',
+	FO: 'Fog dispersal system',
+	FP: 'Heliport',
+	FS: 'Snow removal equipment',
+	FT: 'Transmissometer',
+	FU: 'Fuel availability',
+	FW: 'Wind direction indicator',
+	FZ: 'Customs/immigration',
+	GA: 'GNSS airfield-specific operations',
+	GW: 'GNSS area-wide operations',
+	IA: 'DME',
+	IC: 'Locator',
+	ID: 'DME associated with ILS',
+	IG: 'Glide path',
+	II: 'Inner marker',
+	IJ: 'NDB associated with ILS',
+	IK: 'Inner approach surveillance',
+	IL: 'Instrument landing system (ILS)',
+	IM: 'Middle marker',
+	IN: 'Localizer',
+	IO: 'ILS Category I',
+	IS: 'ILS Category II',
+	IT: 'ILS Category III',
+	IU: 'Microwave landing system (MLS)',
+	IW: 'MLS Category I',
+	IX: 'Locator, outer',
+	IY: 'Locator, middle',
+	LA: 'Approach lighting system',
+	LB: 'Aerodrome beacon',
+	LC: 'Runway centre line lights',
+	LD: 'Landing direction indicator lights',
+	LE: 'Runway edge lights',
+	LF: 'Sequenced flashing lights',
+	LG: 'Pilot-controlled lighting',
+	LH: 'High intensity runway lights',
+	LI: 'Runway end identifier lights',
+	LJ: 'Runway alignment indicator lights',
+	LK: 'Category II lighting system',
+	LL: 'Low intensity runway lights',
+	LM: 'Medium intensity runway lights',
+	LP: 'Precision approach path indicator',
+	LR: 'All landing area lighting facilities',
+	LS: 'Stopway lights',
+	LT: 'Threshold lights',
+	LU: 'Helicopter approach path indicator',
+	LV: 'Visual approach slope indicator system',
+	LW: 'Heliport lighting',
+	LX: 'Taxiway centre line lights',
+	LY: 'Taxiway edge lights',
+	LZ: 'Runway touchdown zone lights',
+	MA: 'Movement area',
+	MB: 'Bearing strength',
+	MC: 'Clearway',
+	MD: 'Declared distances',
+	MG: 'Taxiing guidance system',
+	MH: 'Runway arresting gear',
+	MK: 'Parking area',
+	MM: 'Daylight markings',
+	MN: 'Apron',
+	MO: 'Stopbar',
+	MP: 'Aircraft stands',
+	MR: 'Runway',
+	MS: 'Stopway',
+	MT: 'Threshold',
+	MU: 'Runway turning bay',
+	MW: 'Strip/shoulder',
+	MX: 'Taxiway(s)',
+	MY: 'Rapid exit taxiway',
+	NA: 'All radio navigation facilities',
+	NB: 'Non-directional radio beacon',
+	ND: 'Distance measuring equipment',
+	NF: 'Fan marker',
+	NL: 'Locator',
+	NM: 'VOR/DME',
+	NN: 'TACAN',
+	NO: 'OMEGA',
+	NT: 'VORTAC',
+	NV: 'VOR',
+	NX: 'Direction finding station',
+	OA: 'Aeronautical information service',
+	OB: 'Obstacle',
+	OE: 'Aircraft entry requirements',
+	OL: 'Obstacle lights',
+	OR: 'Rescue coordination centre',
+	PA: 'Standard instrument arrival',
+	PB: 'Standard VFR arrival',
+	PC: 'Contingency procedures',
+	PD: 'Standard instrument departure',
+	PE: 'Standard VFR departure',
+	PF: 'Flow control procedure',
+	PH: 'Holding procedure',
+	PI: 'Instrument approach procedure',
+	PK: 'VFR approach procedure',
+	PL: 'Flight plan processing',
+	PM: 'Aerodrome operating minima',
+	PN: 'Noise operating restriction',
+	PO: 'Obstacle clearance altitude or height',
+	PP: 'Obstacle clearance limit',
+	PR: 'Radio failure procedure',
+	PT: 'Transition altitude or transition level',
+	PU: 'Missed approach procedure',
+	PX: 'Minimum holding altitude',
+	PZ: 'ADIZ procedure',
+	RA: 'Airspace reservation',
+	RD: 'Danger area',
+	RM: 'Military operating area',
+	RO: 'Overflying of',
+	RP: 'Prohibited area',
+	RR: 'Restricted area',
+	RT: 'Temporary restricted area',
+	SA: 'Automatic terminal information service',
+	SB: 'ATS reporting office',
+	SC: 'Area control centre',
+	SE: 'Flight information service',
+	SF: 'Aerodrome flight information service',
+	SL: 'Flow control centre',
+	SO: 'Oceanic area control centre',
+	SP: 'Approach control service',
+	SS: 'Flight service station',
+	ST: 'Aerodrome control tower',
+	SU: 'Upper area control centre',
+	SV: 'VOLMET broadcast',
+	SY: 'Upper advisory service',
+	UA: 'Air traffic control centre',
+	UB: 'ATS reporting office',
+	UE: 'Flight information service',
+	UI: 'AFIS',
+	UO: 'Approach control',
+	UR: 'Aerodrome control tower',
+	WA: 'Air display',
+	WB: 'Aerobatics',
+	WC: 'Captive balloon or kite',
+	WD: 'Demolition of explosives',
+	WE: 'Exercises',
+	WF: 'Air refuelling',
+	WG: 'Glider flying',
+	WH: 'Blasting',
+	WJ: 'Banner/target towing',
+	WL: 'Ascent of free balloon',
+	WM: 'Missile, gun or rocket firing',
+	WP: 'Parachute jumping exercise',
+	WR: 'Radioactive materials or toxic chemicals',
+	WS: 'Burning or blowing gas',
+	WT: 'Mass movement of aircraft',
+	WU: 'Unmanned aircraft',
+	WV: 'Formation flight',
+	WW: 'Significant volcanic activity',
+	WY: 'Aerial survey',
+	WZ: 'Model flying',
+	XX: 'Other',
+};
+
+// ICAO Doc 8126 § 5.2 condition codes (fourth and fifth letters of the Q-code).
+const Q_CONDITIONS = {
+	AC: 'withdrawn for maintenance',
+	AD: 'available for daylight operation',
+	AF: 'flight checked and found reliable',
+	AG: 'operating but ground checked only',
+	AH: 'hours of service now',
+	AK: 'resumed normal operations',
+	AL: 'operative subject to previously published limitations',
+	AM: 'military operations only',
+	AN: 'available for night operation',
+	AO: 'operational',
+	AP: 'available, prior permission required',
+	AR: 'available on request',
+	AS: 'unserviceable',
+	AU: 'not available',
+	AW: 'completely withdrawn',
+	AX: 'previously promulgated shutdown cancelled',
+	BD: 'beacon decommissioned',
+	BE: 'beacon established',
+	CA: 'activated',
+	CC: 'completed',
+	CD: 'deactivated',
+	CE: 'erected, exists',
+	CF: 'operating frequency changed',
+	CG: 'downgraded',
+	CH: 'changed',
+	CI: 'identification or radio call sign changed',
+	CK: 'operating on reduced power',
+	CL: 'operating on test, do not use',
+	CM: 'displaced',
+	CN: 'cancelled',
+	CO: 'operating',
+	CP: 'operating as a fixed obstacle',
+	CR: 'temporarily replaced',
+	CS: 'installed',
+	CT: 'on test, do not use',
+	CU: 'discontinued',
+	CY: 'reclassified',
+	DC: 'distance changed',
+	DI: 'dimensions increased',
+	DR: 'reduced',
+	EI: 'initial operating capability',
+	EL: 'limited',
+	EN: 'now usable on radio',
+	ER: 'restored',
+	ES: 'reserved for further operations',
+	GA: 'activated',
+	GD: 'deactivated',
+	GE: 'established',
+	GS: 'suspended',
+	HG: 'hijacked',
+	HU: 'unsafe',
+	HW: 'hazard warning',
+	HX: 'no specific working hours',
+	IA: 'identification temporarily withdrawn',
+	IE: 'identification of',
+	IN: 'inoperative',
+	IQ: 'inoperative for daylight only',
+	IS: 'inoperative for night use',
+	JO: 'jettisoned',
+	KY: 'key/access',
+	LA: 'limited to',
+	LB: 'reserved for',
+	LC: 'closed',
+	LE: 'operating without auxiliary power',
+	LF: 'reduced interference',
+	LG: 'operating without identification',
+	LH: 'operating without monitoring',
+	LI: 'closed to IFR',
+	LL: 'usable for limited periods',
+	LN: 'available for',
+	LO: 'operating',
+	LP: 'prohibited',
+	LQ: 'closed to VFR',
+	LR: 'restricted',
+	LS: 'subject to interruption',
+	LT: 'limited to specific bearings',
+	LW: 'restricted area created',
+	MB: 'identification or call sign changed',
+	ME: 'frequency changed',
+	MI: 'modified as follows',
+	MP: 'power changed',
+	MS: 'schedule of operating modified',
+	NA: 'new operations now scheduled',
+	NC: 'new course',
+	ND: 'new distance',
+	NE: 'reorganised facilities',
+	NH: 'new hours of service',
+	NI: 'now identified as',
+	NN: 'now available',
+	NO: 'operating on standby',
+	NT: 'test transmissions',
+	NZ: 'newly commissioned',
+	PA: 'prohibited to aircraft',
+	PE: 'permission required',
+	PM: 'parts missing',
+	PO: 'prohibited operating',
+	PP: 'prohibited, permission required',
+	PT: 'time of operation changed',
+	QU: 'questionable',
+	RA: 'reactivated',
+	RE: 'released',
+	RI: 'replaced by',
+	RK: 'remarked',
+	RM: 'removed',
+	RO: 'reopened',
+	RQ: 'reissued',
+	RR: 'refer',
+	RT: 'trigger NOTAM',
+	RY: 'newly published',
+	SA: 'safety advisory',
+	SE: 'available subject to prior conditions',
+	SI: 'special instructions',
+	SQ: 'state of equipment',
+	ST: 'suspended',
+	TA: 'aircraft caught by arresting gear',
+	TE: 'temporarily extended',
+	TI: 'item of equipment',
+	TL: 'limited maintenance work in progress',
+	TO: 'transferred to',
+	TR: 'resumed',
+	TS: 'schedule of operations',
+	TT: 'closed temporarily',
+	UI: 'out of service for operational reasons',
+	UM: 'out of service for maintenance',
+	UR: 'out of service for repair',
+	VA: 'information available',
+	VI: 'verified',
+	WA: 'withdrawn',
+	WK: 'work in progress',
+	XX: 'plain language',
+};
+
+// Decode a 5-letter ICAO Q-code (e.g. "QOBCE") into a human-readable phrase
+// "<subject>, <condition>". Returns '' for invalid input or when neither
+// half is known; falls back to the raw 2-letter half when only one matches.
+function decodeQCode(code) {
+	if (typeof code !== 'string' || !/^Q[A-Z]{4}$/.test(code)) return '';
+	const subject = Q_SUBJECTS[code.substring(1, 3)];
+	const condition = Q_CONDITIONS[code.substring(3, 5)];
+	if (!subject && !condition) return '';
+	return `${subject || code.substring(1, 3)}, ${condition || code.substring(3, 5)}`;
+}
+
 // Parse NOTAM content into ICAO sections (Q, A, B, C, D, E, F, G)
 function parseSections(content) {
 	const sections = {};
@@ -788,18 +1128,18 @@ function parseNotams(text, opts = {}) {
 			}
 		}
 
+		// Parse Q-line once for qCode (and as fallback coord source)
+		const qualifier = sections.Q ? parseQualifierLine(sections.Q) : null;
+
 		// Find qualifier line coordinates only if no PSN coordinates found
-		if (coordinateGroups.length === 0 && sections.Q) {
-			const qualifier = parseQualifierLine(sections.Q);
-			if (qualifier) {
-				coordinateGroups.push([{
-					original: sections.Q.split(/\s*\/\s*/).pop(),
-					lat: qualifier.lat,
-					lon: qualifier.lon,
-					radius: qualifier.radius,
-					type: 'qualifierLine'
-				}]);
-			}
+		if (coordinateGroups.length === 0 && qualifier) {
+			coordinateGroups.push([{
+				original: sections.Q.split(/\s*\/\s*/).pop(),
+				lat: qualifier.lat,
+				lon: qualifier.lon,
+				radius: qualifier.radius,
+				type: 'qualifierLine'
+			}]);
 		}
 
 		// Extract ICAO codes from A) section
@@ -854,7 +1194,8 @@ function parseNotams(text, opts = {}) {
 				startDate: dates.start,
 				endDate: dates.end,
 				permanent: dates.permanent,
-				estimated: dates.estimated
+				estimated: dates.estimated,
+				qCode: qualifier ? qualifier.code : ''
 			});
 		}
 	}
@@ -1088,7 +1429,8 @@ function groupNotamsByLocation(notams, showAll) {
 				fullContent: notam.fullContent,
 				type: coord.type,
 				radius: coord.radius,
-				radiusUnit: coord.radiusUnit
+				radiusUnit: coord.radiusUnit,
+				qCode: notam.qCode
 			});
 			if (coord.type === 'qualifierLine') {
 				group.hasQualifierLine = true;
@@ -1142,12 +1484,17 @@ function buildPopupHtml(group, navInfo) {
 		? `<div class="popup-radius">Radius: ${group.radius} ${radiusUnitDisplay[group.radiusUnit] || 'NM'}</div>`
 		: '';
 
-	const notamsList = group.notams.map(n => `
-		<div class="popup-notam">
-			<strong>${n.id}</strong>
-			<pre class="popup-content">${n.fullContent}</pre>
-		</div>
-	`).join('<hr class="popup-divider">');
+	const notamsList = group.notams.map(n => {
+		const decoded = decodeQCode(n.qCode);
+		const qLine = decoded ? `<div class="popup-qcode">${decoded}</div>` : '';
+		return `
+			<div class="popup-notam">
+				${qLine}
+				<strong>${n.id}</strong>
+				<pre class="popup-content">${n.fullContent}</pre>
+			</div>
+		`;
+	}).join('<hr class="popup-divider">');
 
 	return `
 		<div class="notam-popup">
@@ -1183,6 +1530,18 @@ function buildListItemHtml(group, posIndex) {
 		? `<span class="notam-position">Position (${formatDMS(group.lat, group.lon)})${radiusSuffix}</span>`
 		: '';
 
+	const notamEntries = group.notams.map(n => {
+		const decoded = decodeQCode(n.qCode);
+		const qLine = decoded ? `<div class="list-qcode">${decoded}</div>` : '';
+		return `
+			<div class="notam-entry">
+				${qLine}
+				<div class="notam-entry-id">${n.id}</div>
+				<pre class="notam-content">${n.fullContent}</pre>
+			</div>
+		`;
+	}).join('<hr class="notam-divider">');
+
 	return `
 		<div class="notam-header">
 			<span class="coord-label">#${posIndex}</span>
@@ -1191,12 +1550,7 @@ function buildListItemHtml(group, posIndex) {
 			${positionLabel}
 		</div>
 		<div class="notam-contents">
-			${group.notams.map(n => `
-				<div class="notam-entry">
-					<div class="notam-entry-id">${n.id}</div>
-					<pre class="notam-content">${n.fullContent}</pre>
-				</div>
-			`).join('<hr class="notam-divider">')}
+			${notamEntries}
 		</div>
 	`;
 }
@@ -1275,6 +1629,9 @@ function buildPolygonPopupHtml(notam, navInfo) {
 		? `<div class="popup-icao">${notam.icaoCodes.join(' ')}</div>`
 		: '';
 
+	const decoded = decodeQCode(notam.qCode);
+	const qLine = decoded ? `<div class="popup-qcode">${decoded}</div>` : '';
+
 	return `
 		<div class="notam-popup">
 			${navHtml}
@@ -1285,6 +1642,7 @@ function buildPolygonPopupHtml(notam, navInfo) {
 			</div>
 			<div class="popup-notams-list">
 				<div class="popup-notam">
+					${qLine}
 					<strong>${notam.id}</strong>
 					<pre class="popup-content">${notam.fullContent}</pre>
 				</div>
@@ -1299,6 +1657,9 @@ function buildPolygonListItemHtml(notam, posIndex) {
 		? `<span class="list-icao">${notam.icaoCodes.join(' ')}</span>`
 		: '';
 
+	const decoded = decodeQCode(notam.qCode);
+	const qLine = decoded ? `<div class="list-qcode">${decoded}</div>` : '';
+
 	return `
 		<div class="notam-header">
 			<span class="coord-label">#${posIndex}</span>
@@ -1308,6 +1669,7 @@ function buildPolygonListItemHtml(notam, posIndex) {
 		</div>
 		<div class="notam-contents">
 			<div class="notam-entry">
+				${qLine}
 				<div class="notam-entry-id">${notam.id}</div>
 				<pre class="notam-content">${notam.fullContent}</pre>
 			</div>

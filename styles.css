@@ -401,6 +401,18 @@ button:hover {
 	margin-bottom: 5px;
 }
 
+.popup-qcode,
+.list-qcode {
+	font-size: 11px;
+	color: #666;
+	margin: 2px 0 4px;
+	user-select: none;
+}
+
+.popup-qcode {
+	text-align: center;
+}
+
 .popup-icao {
 	font-weight: bold;
 	color: #333;

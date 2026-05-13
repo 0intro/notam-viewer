@@ -76,7 +76,7 @@ new Script(code).runInContext(context);
 
 const { parseNotams, parseDMSCoordinate, parseQualifierLine,
 	parseNotamDates, parseSections, computePolygonArea,
-	extractRadiusFromText, radiusToNM,
+	extractRadiusFromText, radiusToNM, decodeQCode,
 	buildAirportPopupHtml, airportStyleForType, escapeHtml, prettyAirportType,
 	airportTypeIcon, buildRunwaysHtml, formatSurface } = context;
 
@@ -129,6 +129,43 @@ describe('parseQualifierLine', () => {
 		assertNear(q.lat, 16.25, 'lat');
 		assertNear(q.lon, -61.2667, 'lon');
 		assert.equal(q.radius, 1);
+	});
+
+	it('should preserve the raw Q-code', () => {
+		const q = parseQualifierLine('LFFF / QWULW / IV / BO / W / 000/014 / 4840N00305E005');
+		assert.equal(q.code, 'QWULW');
+	});
+});
+
+// Unit tests for Q-code decoder
+
+describe('decodeQCode', () => {
+	it('should decode a known subject and condition', () => {
+		assert.equal(decodeQCode('QOBCE'), 'Obstacle, erected, exists');
+	});
+
+	it('should decode another known pair', () => {
+		assert.equal(decodeQCode('QWULW'), 'Unmanned aircraft, restricted area created');
+	});
+
+	it('should fall back to the raw condition when only the subject is known', () => {
+		assert.equal(decodeQCode('QOBZZ'), 'Obstacle, ZZ');
+	});
+
+	it('should fall back to the raw subject when only the condition is known', () => {
+		assert.equal(decodeQCode('QZZCE'), 'ZZ, erected, exists');
+	});
+
+	it('should return empty string when neither half is known', () => {
+		assert.equal(decodeQCode('QZZZZ'), '');
+	});
+
+	it('should return empty string for invalid input', () => {
+		assert.equal(decodeQCode(''), '');
+		assert.equal(decodeQCode('QOB'), '');
+		assert.equal(decodeQCode('OBCEX'), '');
+		assert.equal(decodeQCode(null), '');
+		assert.equal(decodeQCode(undefined), '');
 	});
 });
 
