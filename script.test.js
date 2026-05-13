@@ -76,7 +76,7 @@ new Script(code).runInContext(context);
 
 const { parseNotams, parseDMSCoordinate, parseQualifierLine,
 	parseNotamDates, parseSections, computePolygonArea,
-	extractRadiusFromText, radiusToNM, decodeQCode,
+	extractRadiusFromText, radiusToNM, decodeQCode, classifyObstacle,
 	buildAirportPopupHtml, airportStyleForType, escapeHtml, prettyAirportType,
 	airportTypeIcon, buildRunwaysHtml, formatSurface } = context;
 
@@ -282,6 +282,113 @@ describe('computePolygonArea', () => {
 			{ lat: 1, lon: 1 }, { lat: 0, lon: 1 },
 		];
 		assert.ok(computePolygonArea(large) > computePolygonArea(small));
+	});
+});
+
+// Unit tests for obstacle type classifier
+
+describe('classifyObstacle', () => {
+	it('should classify French keywords', () => {
+		assert.equal(classifyObstacle('GRUE MOBILE ERIGEE'), 'crane');
+		assert.equal(classifyObstacle('PARC DES 2 NOUES DE 2 EOLIENNES A FAUX-FRESNAY'), 'turbine');
+		assert.equal(classifyObstacle('BALISAGE OBST MAT DE MESURE NR 14049'), 'metmast');
+		assert.equal(classifyObstacle('ANTENNE GSM SUR LE TOIT'), 'antenna');
+		assert.equal(classifyObstacle('PYLONE TELECOM'), 'antenna');
+		assert.equal(classifyObstacle('CHEMINEE D USINE'), 'chimney');
+		assert.equal(classifyObstacle('LIGNE TRES HAUTE TENSION RELIANT CORDEMAIS'), 'powerline');
+		assert.equal(classifyObstacle('LIGNE HAUTE TENSION'), 'powerline');
+		assert.equal(classifyObstacle('OBSTACLES VEGETAUX A PROXIMITE'), 'trees');
+		assert.equal(classifyObstacle('ARBRES EN BORDURE DE PISTE'), 'trees');
+		assert.equal(classifyObstacle('VOLTIGE AERIENNE'), 'voltige');
+		assert.equal(classifyObstacle('ACTIVITE D AEROMODELISME'), 'aeromodelisme');
+		assert.equal(classifyObstacle('TREUILLAGE PARAPENTE'), 'paragliding');
+		assert.equal(classifyObstacle('LARGAGE PARACHUTISTES SECTEUR CHATEL'), 'parachute');
+		assert.equal(classifyObstacle('PARACHUTAGE'), 'parachute');
+		assert.equal(classifyObstacle('VOL A VOILE'), 'glider');
+		assert.equal(classifyObstacle('PLANEURS'), 'glider');
+		assert.equal(classifyObstacle('ACTIVITE D AERONEFS SANS EQUIPAGE A BORD'), 'drone');
+		assert.equal(classifyObstacle('DRONE OPERATIONS'), 'drone');
+		assert.equal(classifyObstacle('TIRS DE MINE'), 'firing');
+		assert.equal(classifyObstacle('OISEAUX SUR LA PISTE'), 'bird');
+		assert.equal(classifyObstacle('PYROTECHNIQUE'), 'blasting');
+		assert.equal(classifyObstacle('LASER'), 'laser');
+		assert.equal(classifyObstacle('BALISAGE LUMINEUX HORS SERVICE'), 'balisage');
+		assert.equal(classifyObstacle('PHARE DE DANGER U/S'), 'balisage');
+		// "BALISAGE :" / "BALISAGE =" is an attribute line on an obstacle
+		// NOTAM (e.g. P0876/26 drill rig), not a lighting NOTAM subject.
+		assert.equal(classifyObstacle('FOREUSE\nBALISAGE : JOUR ET NUIT'), '');
+		assert.equal(classifyObstacle('BALISAGE=JOUR ET NUIT'), '');
+	});
+
+	it('should classify English keywords', () => {
+		assert.equal(classifyObstacle('TEMPORARY CRANE ERECTED'), 'crane');
+		assert.equal(classifyObstacle('WIND TURBINE BLADE'), 'turbine');
+		assert.equal(classifyObstacle('WTG ARRAY'), 'turbine');
+		assert.equal(classifyObstacle('WIND FARM'), 'turbine');
+		assert.equal(classifyObstacle('MET MAST INSTALLED'), 'metmast');
+		assert.equal(classifyObstacle('MEASUREMENT MAST'), 'metmast');
+		assert.equal(classifyObstacle('ANTENNA MAST'), 'antenna');
+		assert.equal(classifyObstacle('CHIMNEY STACK'), 'chimney');
+		assert.equal(classifyObstacle('POWER LINE'), 'powerline');
+		assert.equal(classifyObstacle('TREE OBSTACLE'), 'trees');
+		assert.equal(classifyObstacle('TREES NEAR RUNWAY'), 'trees');
+		assert.equal(classifyObstacle('VEGETATION'), 'trees');
+		assert.equal(classifyObstacle('CAPTIVE BALLOON'), 'balloon');
+		assert.equal(classifyObstacle('TETHERED BALLOON'), 'balloon');
+		assert.equal(classifyObstacle('AEROBATIC FLIGHT'), 'voltige');
+		assert.equal(classifyObstacle('AEROBATICS'), 'voltige');
+		assert.equal(classifyObstacle('MODEL AIRCRAFT'), 'aeromodelisme');
+		assert.equal(classifyObstacle('MODEL FLYING'), 'aeromodelisme');
+		assert.equal(classifyObstacle('PARAGLIDER LAUNCH'), 'paragliding');
+		assert.equal(classifyObstacle('PARAGLIDING ACTIVITY'), 'paragliding');
+		assert.equal(classifyObstacle('HANG GLIDING'), 'paragliding');
+		assert.equal(classifyObstacle('PARACHUTE JUMPING'), 'parachute');
+		assert.equal(classifyObstacle('SKYDIVING'), 'parachute');
+		assert.equal(classifyObstacle('GLIDER ACTIVITY'), 'glider');
+		assert.equal(classifyObstacle('GLIDING COMPETITION'), 'glider');
+		assert.equal(classifyObstacle('UNMANNED AIRCRAFT OPERATIONS'), 'drone');
+		assert.equal(classifyObstacle('REMOTELY PILOTED AIRCRAFT'), 'drone');
+		assert.equal(classifyObstacle('UAS FLIGHTS'), 'drone');
+		assert.equal(classifyObstacle('RPAS'), 'drone');
+		assert.equal(classifyObstacle('GUN FIRING'), 'firing');
+		assert.equal(classifyObstacle('ROCKET LAUNCH'), 'firing');
+		assert.equal(classifyObstacle('MISSILE TEST'), 'firing');
+		assert.equal(classifyObstacle('BLASTING OPERATIONS'), 'blasting');
+		assert.equal(classifyObstacle('DEMOLITION'), 'blasting');
+		assert.equal(classifyObstacle('EXPLOSIVES'), 'blasting');
+		assert.equal(classifyObstacle('FIREWORKS DISPLAY'), 'blasting');
+		assert.equal(classifyObstacle('BIRD HAZARD'), 'bird');
+		assert.equal(classifyObstacle('BIRD ACTIVITY'), 'bird');
+		assert.equal(classifyObstacle('WILDLIFE HAZARD'), 'bird');
+		assert.equal(classifyObstacle('LASER ACTIVITY'), 'laser');
+		assert.equal(classifyObstacle('LASER BEAM'), 'laser');
+		assert.equal(classifyObstacle('OBST LGT U/S'), 'balisage');
+		assert.equal(classifyObstacle('OBSTACLE LIGHT UNSERVICEABLE'), 'balisage');
+	});
+
+	it('should be case-insensitive', () => {
+		assert.equal(classifyObstacle('grue mobile'), 'crane');
+		assert.equal(classifyObstacle('Eolienne'), 'turbine');
+	});
+
+	it('should return empty string when no keyword matches', () => {
+		assert.equal(classifyObstacle(''), '');
+		assert.equal(classifyObstacle(null), '');
+		assert.equal(classifyObstacle('PARC NATIONAL DES CEVENNES'), '');
+	});
+
+	it('should respect word boundaries', () => {
+		// Should not match "GRIN" inside "PEREGRIN" via "GRUE"
+		assert.equal(classifyObstacle('PEREGRINE FALCON OPERATIONS'), '');
+		// "CRANES" plural should match
+		assert.equal(classifyObstacle('TWO CRANES ERECTED'), 'crane');
+	});
+
+	it('should pick the first match when multiple keywords appear', () => {
+		// CRANE comes before ANTENNA in the rule order
+		assert.equal(classifyObstacle('CRANE NEAR ANTENNA'), 'crane');
+		// EOLIENNE checked before MAT
+		assert.equal(classifyObstacle('EOLIENNE ON MAT DE MESURE'), 'turbine');
 	});
 });
 

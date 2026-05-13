@@ -79,17 +79,14 @@ const markerIconOptions = {
 	shadowSize: [41, 41]
 };
 
+const MARKER_RED_URL = 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png';
+const MARKER_BLUE_URL = 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png';
+
 // Red marker icon for qualifier line coordinates
-const redIcon = L.icon({
-	...markerIconOptions,
-	iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png'
-});
+const redIcon = L.icon({ ...markerIconOptions, iconUrl: MARKER_RED_URL });
 
 // Default blue marker icon
-const blueIcon = L.icon({
-	...markerIconOptions,
-	iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png'
-});
+const blueIcon = L.icon({ ...markerIconOptions, iconUrl: MARKER_BLUE_URL });
 
 let markers = [];
 let activeRadiusCircle = null; // Current ephemeral radius circle (qualifier line, popup-bound)
@@ -363,6 +360,43 @@ const areaExclusionPattern = /\bRESTRICTED\s+IN\s+AREA\b/i;
 // Two full DMS coords joined by a dash. lat/lon may be separated by whitespace
 // or by a comma (French SUP AIP format like `470240N,0001500W`).
 const dashConnectedCoordsPattern = /\d{4,7}[NS](?:\s+|\s*,\s*)\d{5,8}[EW]\s*[-]\s*\d{4,7}[NS](?:\s+|\s*,\s*)\d{5,8}[EW]/i;
+
+// Classify the NOTAM E) section into a coarse obstacle / activity type.
+// Returns one of crane|turbine|metmast|antenna|chimney|powerline|trees|balloon|
+// voltige|aeromodelisme|paragliding|glider|parachute|drone|firing|blasting|
+// bird|laser|balisage, or ''. Every alternation matches real NOTAM text in
+// testdata/World-20260512.txt; `?` plural endings are kept only when both
+// forms actually appear in data.
+// Order matters: when keywords overlap, the first match wins.
+function classifyObstacle(eText) {
+	if (!eText) return '';
+	const t = eText.toUpperCase();
+	if (/\b(GRUES?|CRANES?)\b/.test(t)) return 'crane';
+	if (/\b(EOLIENNES?|WIND\s+TURBINES?|WTG|WIND\s+FARM)\b/.test(t)) return 'turbine';
+	if (/\bMAT\s+DE\s+MESURE\b|\bMET\s+MAST\b|\bMEASUREMENT\s+MAST\b/.test(t)) return 'metmast';
+	if (/\b(ANTENNES?|ANTENNAS?|PYLONE|PYLONS?)\b/.test(t)) return 'antenna';
+	if (/\b(CHEMINEE|CHIMNEYS?)\b/.test(t)) return 'chimney';
+	if (/\bLIGNE\s+(TRES\s+)?HAUTE\s+TENSION\b|\bPOWER\s+LINES?\b/.test(t)) return 'powerline';
+	if (/\b(ARBRES?|TREES?|VEGETAL|VEGETAUX|VEGETATION|FOREST|FORET)\b/.test(t)) return 'trees';
+	if (/\bBALLOONS?\b|\bBALLON\b/.test(t)) return 'balloon';
+	if (/\bVOLTIGE\b|\bAEROBATICS?\b/.test(t)) return 'voltige';
+	if (/\bAEROMODELISME\b|\bMODEL\s+AIRCRAFT\b|\bMODEL\s+FLYING\b/.test(t)) return 'aeromodelisme';
+	if (/\b(PARAPENTES?|PARAGLIDERS?|PARAGLIDING|HANG\s+GLIDING)\b/.test(t)) return 'paragliding';
+	if (/\b(PLANEURS?|VOL\s+A\s+VOILE|GLIDERS?|GLIDING)\b/.test(t)) return 'glider';
+	if (/\bPARACHUTE\b|\bPARACHUTING\b|\bPARACHUTAGES?\b|\bPARACHUTISTES?\b|\bSKYDIVING\b/.test(t)) return 'parachute';
+	if (/\b(UAS|UAV|RPAS?|DRONES?|UNMANNED\s+AIRCRAFT|UNMANNED\s+AERIAL|REMOTELY\s+PILOTED|AERONEFS?\s+SANS\s+EQUIPAGE|TELEPILOTES)\b/.test(t)) return 'drone';
+	if (/\bGUNS?\b|\bFIRING\b|\bROCKETS?\b|\bMISSILES?\b|\bTIRS?\b/.test(t)) return 'firing';
+	if (/\bBLASTING\b|\bDEMOLITION\b|\bEXPLOSIVES?\b|\bFIREWORKS\b|\bPYROTECHNIQUE\b/.test(t)) return 'blasting';
+	if (/\bBIRDS?\b|\bWILDLIFE\s+HAZARD\b|\bOISEAUX\b/.test(t)) return 'bird';
+	if (/\bLASER\b/.test(t)) return 'laser';
+	// BALISAGE/OBSTACLE LIGHT is a fallback: NOTAMs about obstacle lighting
+	// usually also name the obstacle (crane, mast, ...), which an earlier rule
+	// will have matched. This catches lighting NOTAMs with no obstacle keyword.
+	// BALISAGE followed by ':' or '=' is a descriptive attribute on an
+	// obstacle NOTAM ("BALISAGE : JOUR ET NUIT"), not the subject — skip it.
+	if (/\bBALISAGE\b(?!\s*[:=])|\bPHARE\s+DE\s+DANGER\b|\bOBST(?:ACLE)?\s+(?:LIGHTS?|LGTS?|LIGHTING)\b/.test(t)) return 'balisage';
+	return '';
+}
 
 // Extract radius info from text surrounding a coordinate match in the E) section
 function extractRadiusFromText(eContent, matchStart, matchEnd) {
@@ -1196,7 +1230,8 @@ function parseNotams(text, opts = {}) {
 				endDate: dates.end,
 				permanent: dates.permanent,
 				estimated: dates.estimated,
-				qCode: qualifier ? qualifier.code : ''
+				qCode: qualifier ? qualifier.code : '',
+				obstacleType: classifyObstacle(eContent)
 			});
 		}
 	}
@@ -1431,7 +1466,8 @@ function groupNotamsByLocation(notams, showAll) {
 				type: coord.type,
 				radius: coord.radius,
 				radiusUnit: coord.radiusUnit,
-				qCode: notam.qCode
+				qCode: notam.qCode,
+				obstacleType: notam.obstacleType
 			});
 			if (coord.type === 'qualifierLine') {
 				group.hasQualifierLine = true;
@@ -1781,6 +1817,7 @@ function parseAndDisplay() {
 	const notams = parseNotams(input, { lookupAirport: buildAirportLookup() });
 	const listEl = document.getElementById('coordinatesList');
 	const showAll = document.getElementById('showAllNotams').checked;
+	const useTypeIcons = document.getElementById('typeIcons').checked;
 
 	clearMarkers();
 	listEl.innerHTML = '';
@@ -1851,7 +1888,17 @@ function parseAndDisplay() {
 
 		// First marker at a location gets higher z-index so it's clickable
 		const zIndexOffset = hasMultipleAtLocation ? (totalAtLocation - groupIndex) * 100 : 0;
-		const icon = group.hasQualifierLine ? blueIcon : redIcon;
+		// Pick a representative obstacle type for the group; the most common,
+		// first on tie. Type icons are only shown on red (PSN) markers; blue
+		// qualifier-line markers keep the plain pin since the location is
+		// coarse. Empty when no NOTAM in the group has a known type or when
+		// type icons are disabled.
+		const types = (useTypeIcons && !group.hasQualifierLine)
+			? group.notams.map(n => n.obstacleType).filter(Boolean) : [];
+		const dominantType = types.length ? mode(types) : '';
+		const icon = dominantType
+			? obstacleMarkerIcon(dominantType)
+			: (group.hasQualifierLine ? blueIcon : redIcon);
 		const marker = L.marker([group.lat, group.lon], { icon, zIndexOffset }).addTo(map);
 
 		marker.bindPopup(buildPopupHtml(group, navInfo), NOTAM_POPUP_OPTIONS);
@@ -2174,6 +2221,77 @@ function buildRunwaysHtml(runways) {
 
 // Maki icons (https://github.com/mapbox/maki, CC0). Stripped of the width /
 // height attributes so the consumer can size them via CSS.
+// Obstacle / activity glyph path data, 24x24 viewBox. Most paths are from
+// Material Design Icons (Apache 2.0); glider is hand-drawn since MDI has no
+// glider icon.
+const OBSTACLE_GLYPH_PATHS = {
+	crane: 'M20,6V5A1,1 0 0,0 19,4H9V3H6V4H5V6H6V15H5V13H3V15H2V17H3V21H5V17H10V21H12V19.92L12,17H13V15H12V13H10V15H9V6H17V10.62C16.53,10.79 16.19,11.23 16.19,11.76C16.19,12.2 16.43,12.6 16.8,12.82V14H17.42C17.76,14 18.03,14.28 18.03,14.62C18.03,14.96 17.76,15.24 17.42,15.24C17.2,15.24 17,15.12 16.89,14.93C16.71,14.64 16.34,14.54 16.05,14.71C15.75,14.87 15.65,15.25 15.82,15.55C16.15,16.11 16.76,16.47 17.42,16.47C18.43,16.47 19.26,15.64 19.26,14.62C19.26,13.84 18.76,13.14 18.03,12.88V12.82C18.41,12.6 18.65,12.2 18.65,11.76C18.65,11.3 18.38,10.91 18,10.7V6H20M8,13.66L7,14.66V13.24L8,12.24V13.66M8,10.71L7,11.71V10.29L8,9.29V10.71M7,8.71V7.29L8,6.29V7.71L7,8.71Z',
+	turbine: 'M13.33,11.67L16.21,14.58C17.62,13.16 16.21,11.75 16.21,11.75L14.72,10.24C14.9,9.86 15,9.44 15,9C15,7.95 14.46,7.03 13.64,6.5L15,2.11C13.09,1.53 12.5,3.44 12.5,3.44L11.69,6.03C10.46,6.16 9.46,7 9.13,8.18L4.67,9.63C5.31,11.53 7.2,10.9 7.2,10.9L9.27,10.23C9.61,10.97 10.23,11.54 11,11.82V19C11,19 9,19 9,21C9,21.5 9,21.81 9,22H15V21C15,21 15,19 13,19V11.82C13.12,11.78 13.23,11.72 13.33,11.67M10.5,9A1.5,1.5 0 0,1 12,7.5A1.5,1.5 0 0,1 13.5,9A1.5,1.5 0 0,1 12,10.5A1.5,1.5 0 0,1 10.5,9Z',
+	metmast: 'M7 5V13L22 11V7L7 5M10 6.91L13 7.31V10.69L10 11.09V6.91M16 7.71L19 8.11V9.89L16 10.29V7.71M5 10V11H6V12H5V21H3V4C3 3.45 3.45 3 4 3S5 3.45 5 4V6H6V7H5V10Z',
+	antenna: 'M12 7.5C12.69 7.5 13.27 7.73 13.76 8.2S14.5 9.27 14.5 10C14.5 11.05 14 11.81 13 12.28V21H11V12.28C10 11.81 9.5 11.05 9.5 10C9.5 9.27 9.76 8.67 10.24 8.2S11.31 7.5 12 7.5M16.69 5.3C17.94 6.55 18.61 8.11 18.7 10C18.7 11.8 18.03 13.38 16.69 14.72L15.5 13.5C16.5 12.59 17 11.42 17 10C17 8.67 16.5 7.5 15.5 6.5L16.69 5.3M6.09 4.08C4.5 5.67 3.7 7.64 3.7 10S4.5 14.3 6.09 15.89L4.92 17.11C3 15.08 2 12.7 2 10C2 7.3 3 4.94 4.92 2.91L6.09 4.08M19.08 2.91C21 4.94 22 7.3 22 10C22 12.8 21 15.17 19.08 17.11L17.91 15.89C19.5 14.3 20.3 12.33 20.3 10S19.5 5.67 17.91 4.08L19.08 2.91M7.31 5.3L8.5 6.5C7.5 7.42 7 8.58 7 10C7 11.33 7.5 12.5 8.5 13.5L7.31 14.72C5.97 13.38 5.3 11.8 5.3 10C5.3 8.2 5.97 6.64 7.31 5.3Z',
+	chimney: 'M4,18V20H8V18H4M4,14V16H14V14H4M10,18V20H14V18H10M16,14V16H20V14H16M16,18V20H20V18H16M2,22V8L7,12V8L12,12V8L17,12L18,2H21L22,12V22H2Z',
+	powerline: 'M8.28,5.45L6.5,4.55L7.76,2H16.23L17.5,4.55L15.72,5.44L15,4H9L8.28,5.45M18.62,8H14.09L13.3,5H10.7L9.91,8H5.38L4.1,10.55L5.89,11.44L6.62,10H17.38L18.1,11.45L19.89,10.56L18.62,8M17.77,22H15.7L15.46,21.1L12,15.9L8.53,21.1L8.3,22H6.23L9.12,11H11.19L10.83,12.35L12,14.1L13.16,12.35L12.81,11H14.88L17.77,22M11.4,15L10.5,13.65L9.32,18.13L11.4,15M14.68,18.12L13.5,13.64L12.6,15L14.68,18.12Z',
+	trees: 'M10,21V18H3L8,13H5L10,8H7L12,3L17,8H14L19,13H16L21,18H14V21H10Z',
+	balloon: 'M13.16,12.74L14,14H12.5C12.35,16.71 12,19.41 11.5,22.08L10.5,21.92C11,19.3 11.34,16.66 11.5,14H10L10.84,12.74C8.64,11.79 7,8.36 7,6A5,5 0 0,1 12,1A5,5 0 0,1 17,6C17,8.36 15.36,11.79 13.16,12.74Z',
+	voltige: 'M20.56 3.91C21.15 4.5 21.15 5.45 20.56 6.03L16.67 9.92L18.79 19.11L17.38 20.53L13.5 13.1L9.6 17L9.96 19.47L8.89 20.53L7.13 17.35L3.94 15.58L5 14.5L7.5 14.87L11.37 11L3.94 7.09L5.36 5.68L14.55 7.8L18.44 3.91C19 3.33 20 3.33 20.56 3.91Z',
+	aeromodelisme: 'M13.69 3.46C13.35 3.15 12.96 3 12.5 3C12.05 3 11.66 3.15 11.33 3.46L5.54 9.08C5.23 9.38 5.06 9.75 5 10.2C5 10.64 5.08 11.04 5.33 11.4L11.45 19.83C11.2 20.36 10.75 20.62 10.09 20.62C9.29 20.62 8.79 20.25 8.6 19.5C8.4 18.84 8 18.27 7.38 17.8C6.76 17.34 6.1 17.1 5.41 17.1C4.36 17.1 3.5 17.5 2.85 18.3L4.21 19.42C4.5 19.03 4.92 18.84 5.41 18.84C6.21 18.84 6.71 19.21 6.9 19.95C7.09 20.62 7.5 21.19 8.12 21.67C8.74 22.15 9.4 22.4 10.09 22.4C11.33 22.4 12.28 21.83 12.94 20.7L19.68 11.39C19.93 11.04 20.03 10.64 20 10.2C19.95 9.75 19.77 9.38 19.47 9.08L13.69 3.46Z',
+	paragliding: 'M12 17C10.9 17 10 16.11 10 15S10.9 13 12 13 14 13.9 14 15 13.11 17 12 17M19 14H17C17 16.76 14.76 19 12 19S7 16.76 7 14H5C5 16.79 6.64 19.19 9 20.32V23H15V20.32C17.36 19.19 19 16.79 19 14M23 7.76C23.04 8.56 22.05 9.06 21.41 8.6C21.27 8.46 21.16 8.44 21 8.32L18.97 13H17L15.5 6.73C13.21 6.5 10.79 6.5 8.5 6.73L7 13H5.03L3 8.32C2.84 8.44 2.73 8.46 2.59 8.6C1.95 9.06 .959 8.56 1 7.76V4C1 4 1 1 12 1S23 4 23 4M6.9 7C6 7.2 5.15 7.43 4.37 7.71L5.87 11.27L6.9 7M19.63 7.71C18.85 7.43 18 7.2 17.1 7L18.13 11.27L19.63 7.71Z',
+	parachute: 'M21.2,10.95L12,23L2.78,10.96L2.87,10.88C3.08,10.67 3.33,10.5 3.58,10.36L10.73,19.69L8.58,13L9.24,11.81L12,20.38L14.73,11.8L15.4,13L13.27,19.69L20.41,10.35C20.66,10.5 20.9,10.64 21.1,10.85L21.2,10.95M5,9C6.5,9 7.81,9.86 8.5,11.1C9.17,9.86 10.47,9 12,9C13.5,9 14.8,9.85 15.5,11.09C16.16,9.84 17.47,9 19,9C20.09,9 21.09,9.42 21.81,10.14C20.94,5.5 16.88,2 12,2C7.09,2 3.03,5.5 2.16,10.17C2.89,9.45 3.89,9 5,9Z',
+	balisage: 'M12,6A6,6 0 0,1 18,12C18,14.22 16.79,16.16 15,17.2V19A1,1 0 0,1 14,20H10A1,1 0 0,1 9,19V17.2C7.21,16.16 6,14.22 6,12A6,6 0 0,1 12,6M14,21V22A1,1 0 0,1 13,23H11A1,1 0 0,1 10,22V21H14M20,11H23V13H20V11M1,11H4V13H1V11M13,1V4H11V1H13M4.92,3.5L7.05,5.64L5.63,7.05L3.5,4.93L4.92,3.5M16.95,5.63L19.07,3.5L20.5,4.93L18.37,7.05L16.95,5.63Z',
+	drone: 'M5.5,1C8,1 10,3 10,5.5C10,6.38 9.75,7.2 9.31,7.9L9.41,8H14.59L14.69,7.9C14.25,7.2 14,6.38 14,5.5C14,3 16,1 18.5,1C21,1 23,3 23,5.5C23,8 21,10 18.5,10C17.62,10 16.8,9.75 16.1,9.31L15,10.41V13.59L16.1,14.69C16.8,14.25 17.62,14 18.5,14C21,14 23,16 23,18.5C23,21 21,23 18.5,23C16,23 14,21 14,18.5C14,17.62 14.25,16.8 14.69,16.1L14.59,16H9.41L9.31,16.1C9.75,16.8 10,17.62 10,18.5C10,21 8,23 5.5,23C3,23 1,21 1,18.5C1,16 3,14 5.5,14C6.38,14 7.2,14.25 7.9,14.69L9,13.59V10.41L7.9,9.31C7.2,9.75 6.38,10 5.5,10C3,10 1,8 1,5.5C1,3 3,1 5.5,1M5.5,3A2.5,2.5 0 0,0 3,5.5A2.5,2.5 0 0,0 5.5,8A2.5,2.5 0 0,0 8,5.5A2.5,2.5 0 0,0 5.5,3M5.5,16A2.5,2.5 0 0,0 3,18.5A2.5,2.5 0 0,0 5.5,21A2.5,2.5 0 0,0 8,18.5A2.5,2.5 0 0,0 5.5,16M18.5,3A2.5,2.5 0 0,0 16,5.5A2.5,2.5 0 0,0 18.5,8A2.5,2.5 0 0,0 21,5.5A2.5,2.5 0 0,0 18.5,3M18.5,16A2.5,2.5 0 0,0 16,18.5A2.5,2.5 0 0,0 18.5,21A2.5,2.5 0 0,0 21,18.5A2.5,2.5 0 0,0 18.5,16Z',
+	firing: 'M11,2V4.07C7.38,4.53 4.53,7.38 4.07,11H2V13H4.07C4.53,16.62 7.38,19.47 11,19.93V22H13V19.93C16.62,19.47 19.47,16.62 19.93,13H22V11H19.93C19.47,7.38 16.62,4.53 13,4.07V2M11,6.08V8H13V6.09C15.5,6.5 17.5,8.5 17.92,11H16V13H17.91C17.5,15.5 15.5,17.5 13,17.92V16H11V17.91C8.5,17.5 6.5,15.5 6.08,13H8V11H6.09C6.5,8.5 8.5,6.5 11,6.08M12,11A1,1 0 0,0 11,12A1,1 0 0,0 12,13A1,1 0 0,0 13,12A1,1 0 0,0 12,11Z',
+	blasting: 'M11.25,6A3.25,3.25 0 0,1 14.5,2.75A3.25,3.25 0 0,1 17.75,6C17.75,6.42 18.08,6.75 18.5,6.75C18.92,6.75 19.25,6.42 19.25,6V5.25H20.75V6A2.25,2.25 0 0,1 18.5,8.25A2.25,2.25 0 0,1 16.25,6A1.75,1.75 0 0,0 14.5,4.25A1.75,1.75 0 0,0 12.75,6H14V7.29C16.89,8.15 19,10.83 19,14A7,7 0 0,1 12,21A7,7 0 0,1 5,14C5,10.83 7.11,8.15 10,7.29V6H11.25M22,6H24V7H22V6M19,4V2H20V4H19M20.91,4.38L22.33,2.96L23.04,3.67L21.62,5.09L20.91,4.38Z',
+	bird: 'M23 11.5L19.95 10.37C19.69 9.22 19.04 8.56 19.04 8.56C17.4 6.92 14.75 6.92 13.11 8.56L11.63 10.04L5 3C4 7 5 11 7.45 14.22L2 19.5C2 19.5 10.89 21.5 16.07 17.45C18.83 15.29 19.45 14.03 19.84 12.7L23 11.5M17.71 11.72C17.32 12.11 16.68 12.11 16.29 11.72C15.9 11.33 15.9 10.7 16.29 10.31C16.68 9.92 17.32 9.92 17.71 10.31C18.1 10.7 18.1 11.33 17.71 11.72Z',
+	laser: 'M9 13L5 16C4 16.88 3.86 18.12 4 19C4.13 20 4.91 21.22 6 21.68C7.57 22.35 9.09 21.9 10.04 20.92L19 13C20.86 11.62 20 9 18 9H12L19.46 4.61C19.9 4.29 20.08 3.82 20.06 3.37C20 2.67 19.46 2 18.6 2H18.54C18.19 2 17.86 2.11 17.56 2.29L5 9C4.19 9.46 3.94 10.24 4 11C4.05 12.03 4.74 13 6 13M5 18.5C5 17.12 6.12 16 7.5 16S10 17.12 10 18.5 8.88 21 7.5 21 5 19.88 5 18.5Z',
+	glider: 'M2 12.5h20v1.5H2zM11.5 3h1.5v18h-1.5zM9 19h6v1.5H9z',
+};
+
+const PIN_BODY_PATH = 'M12.5 0 C5.6 0 0 5.6 0 12.5 C0 21.9 12.5 41 12.5 41 C12.5 41 25 21.9 25 12.5 C25 5.6 19.4 0 12.5 0 Z';
+
+// Build a self-contained SVG marker: teardrop pin + white inner disc + glyph,
+// all in one image so a single <img> per marker is all the DOM needs.
+function obstacleMarkerSvg(type, color) {
+	const glyph = OBSTACLE_GLYPH_PATHS[type];
+	return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 25 41" width="25" height="41">' +
+		`<path d="${PIN_BODY_PATH}" fill="${color}"/>` +
+		'<circle cx="12.5" cy="12.5" r="9" fill="#fff"/>' +
+		(glyph
+			? `<svg x="4.5" y="4.5" width="16" height="16" viewBox="0 0 24 24" fill="${color}"><path d="${glyph}"/></svg>`
+			: '') +
+		'</svg>';
+}
+
+// Cache one L.icon per type — all PSN markers of the same kind share it.
+// Type icons are only used on red (PSN) markers, not blue qualifier-line ones,
+// where the coarse location makes a precise type icon misleading.
+const obstacleIconCache = new Map();
+function obstacleMarkerIcon(type) {
+	let icon = obstacleIconCache.get(type);
+	if (!icon) {
+		const svg = obstacleMarkerSvg(type, '#cb2026');
+		icon = L.icon({
+			...markerIconOptions,
+			iconUrl: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg)
+		});
+		obstacleIconCache.set(type, icon);
+	}
+	return icon;
+}
+
+// Return the most frequent element of an array, falling back to the first
+// on ties. Used to pick a representative obstacle type for a group of
+// NOTAMs at the same location.
+function mode(arr) {
+	const counts = new Map();
+	for (const v of arr) counts.set(v, (counts.get(v) || 0) + 1);
+	let best = arr[0];
+	let bestCount = 0;
+	for (const [v, c] of counts) {
+		if (c > bestCount) { best = v; bestCount = c; }
+	}
+	return best;
+}
+
 const MAKI_AIRPORT_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 15 15" fill="currentColor"><path d="M15,6.8182L15,8.5l-6.5-1l-0.3182,4.7727L11,14v1l-3.5-0.6818L4,15v-1l2.8182-1.7273L6.5,7.5L0,8.5V6.8182L6.5,4.5v-3c0,0,0-1.5,1-1.5s1,1.5,1,1.5v2.8182L15,6.8182z"/></svg>';
 const MAKI_HELIPORT_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 15 15" fill="currentColor"><path d="M4,2C3,2,3,3,4,3h4v1C7.723,4,7.5,4.223,7.5,4.5V5H5H3.9707H3.9316C3.7041,4.1201,2.9122,3.5011,2,3.5c-1.1046,0-2,0.8954-2,2s0.8954,2,2,2c0.3722-0.001,0.7368-0.1058,1.0527-0.3027L5.5,10.5C6.5074,11.9505,8.3182,12,9,12h5c0,0,1,0,1-1v-0.9941C15,9.2734,14.874,8.874,14.5,8.5l-3-3c0,0-0.5916-0.5-1.2734-0.5H9.5V4.5C9.5,4.223,9.277,4,9,4V3h4c1,0,1-1,0-1C13,2,4,2,4,2z M2,4.5c0.5523,0,1,0.4477,1,1s-0.4477,1-1,1s-1-0.4477-1-1C1,4.9477,1.4477,4.5,2,4.5z M10,6c0.5,0,0.7896,0.3231,1,0.5L13.5,9H10c0,0-1,0-1-1V7C9,7,9,6,10,6z"/></svg>';
 const MAKI_HARBOR_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 15 15" fill="currentColor"><path d="M7.5,0C5.5,0,4,1.567,4,3.5c0.0024,1.5629,1.0397,2.902,2.5,3.3379v6.0391c-0.9305-0.1647-1.8755-0.5496-2.6484-1.2695C2.7992,10.6273,2.002,9.0676,2.002,6.498c0.0077-0.5646-0.4531-1.0236-1.0176-1.0137C0.4329,5.493-0.0076,5.9465,0,6.498c0,3.0029,1.0119,5.1955,2.4902,6.5723C3.9685,14.4471,5.8379,15,7.5,15c1.6656,0,3.535-0.5596,5.0117-1.9395S14.998,9.4868,14.998,6.498c0.0648-1.3953-2.0628-1.3953-1.998,0c0,2.553-0.7997,4.1149-1.8535,5.0996C10.3731,12.3203,9.4288,12.7084,8.5,12.875V6.8418C9.9607,6.4058,10.9986,5.0642,11,3.5C11,1.567,9.5,0,7.5,0z M7.5,2C8.3284,2,9,2.6716,9,3.5S8.3284,5,7.5,5S6,4.3284,6,3.5S6.6716,2,7.5,2z"/></svg>';
