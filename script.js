@@ -616,8 +616,9 @@ function parseNotams(text) {
 				//   "455554.997N 0060439.322E"   decimal seconds with space
 				//   "443557.2N0035201.12E"       decimal seconds, no separator
 				//   "483916,433N 0052902,045E"   French comma-as-decimal-point
+				//   "441007 N 0045151 E"         space between digits and hemisphere letter
 				//   "161514N0611540W"            fixed 6+7 digits, no separator
-				const coordPattern = /(\d{4,7}(?:[.,]\d+)?)([NS])(?:\s+|\s*[,-]\s*)?(\d{5,8}(?:[.,]\d+)?)([EW])|(\d{6})([NS])(\d{7})([EW])/gi;
+				const coordPattern = /(\d{4,7}(?:[.,]\d+)?)\s*([NS])(?:\s+|\s*[,-]\s*)?(\d{5,8}(?:[.,]\d+)?)\s*([EW])|(\d{6})([NS])(\d{7})([EW])/gi;
 				let match;
 				let groupClosed = false;
 

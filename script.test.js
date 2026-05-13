@@ -348,7 +348,7 @@ describe('parseNotams - positions', () => {
 	const notams = parseNotams(positionsText);
 
 	it('should parse all position NOTAMs', () => {
-		assert.equal(notams.length, 28);
+		assert.equal(notams.length, 29);
 	});
 
 	it('should not mark any position NOTAM as polygon', () => {
@@ -455,6 +455,14 @@ describe('parseNotams - positions', () => {
 		assertNear(n.coordinates[0].lon, 16.035, 'lon');
 		assert.equal(n.coordinates[0].radius, 500);
 		assert.equal(n.coordinates[0].radiusUnit, 'M');
+	});
+
+	it('should parse PSN with space between digits and hemisphere (P1484/26)', () => {
+		const n = findNotam(notams, 'P1484/26');
+		assert.ok(n);
+		assert.equal(n.coordinates[0].type, 'psn');
+		assertNear(n.coordinates[0].lat, 44.1686, 'lat');
+		assertNear(n.coordinates[0].lon, 4.8642, 'lon');
 	});
 
 	it('should parse PSN with no separator and decimal seconds (P0436/26)', () => {
@@ -837,18 +845,18 @@ describe('parseNotams - areas', () => {
 // Integration tests: statistics
 
 const statisticsTests = [
-	{ file: 'Europe-20260203.txt', all: 10896, noPosition: 7172, positions: 2714, areas: 1010 },
-	{ file: 'LPPT-EPWA-20260207.txt', all: 983, noPosition: 393, positions: 467, areas: 123 },
+	{ file: 'Europe-20260203.txt', all: 10896, noPosition: 7168, positions: 2717, areas: 1011 },
+	{ file: 'LPPT-EPWA-20260207.txt', all: 983, noPosition: 392, positions: 468, areas: 123 },
 	{ file: 'EGPD-LFKC-20260207.txt', all: 676, noPosition: 226, positions: 408, areas: 42 },
 	{ file: 'KJFK-KLAX-20260209.txt', all: 449, noPosition: 355, positions: 93, areas: 1 },
 	{ file: 'CYQB-CYVR-20260209.txt', all: 366, noPosition: 121, positions: 243, areas: 2 },
 	{ file: 'CYTZ-SAWG-20260209.txt', all: 554, noPosition: 367, positions: 166, areas: 21 },
-	{ file: 'EGLL-FACT-20260209.txt', all: 761, noPosition: 379, positions: 333, areas: 49 },
+	{ file: 'EGLL-FACT-20260209.txt', all: 761, noPosition: 377, positions: 335, areas: 49 },
 	{ file: 'ENGM-YSCB-20260209.txt', all: 520, noPosition: 269, positions: 160, areas: 91 },
-	{ file: 'LEMD-UHWW-20260209.txt', all: 1436, noPosition: 594, positions: 661, areas: 181 },
-	{ file: 'LSHJ-ZBAA-20260209.txt', all: 1337, noPosition: 473, positions: 755, areas: 109 },
-	{ file: 'SBBE-VIDP-20260209.txt', all: 315, noPosition: 259, positions: 33, areas: 23 },
-	{ file: 'World-20260207.txt', all: 36725, noPosition: 25480, positions: 7571, areas: 3674 },
+	{ file: 'LEMD-UHWW-20260209.txt', all: 1436, noPosition: 593, positions: 662, areas: 181 },
+	{ file: 'LSHJ-ZBAA-20260209.txt', all: 1337, noPosition: 472, positions: 755, areas: 110 },
+	{ file: 'SBBE-VIDP-20260209.txt', all: 315, noPosition: 257, positions: 33, areas: 25 },
+	{ file: 'World-20260207.txt', all: 36725, noPosition: 25472, positions: 7575, areas: 3678 },
 ];
 
 // NOTAMs to be investigated: coordinates far from Q-line due to
