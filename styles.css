@@ -302,9 +302,11 @@ button:hover {
 	font-size: 11px;
 	line-height: 1.4;
 	white-space: pre-wrap;
-	overflow-x: auto;
+	overflow-wrap: anywhere;
+	overflow-x: hidden;
 	max-height: 200px;
 	overflow-y: auto;
+	position: relative;
 }
 
 .notam-popup {
@@ -333,7 +335,18 @@ button:hover {
 	font-family: 'Courier New', monospace;
 	font-size: 11px;
 	line-height: 1.3;
-	white-space: pre;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	position: relative;
+}
+
+.wrap-marker {
+	position: absolute;
+	color: #aaa;
+	user-select: none;
+	pointer-events: none;
+	font-size: inherit;
+	line-height: inherit;
 }
 
 .popup-header {

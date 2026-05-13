@@ -2,6 +2,7 @@
 const DEFAULT_CENTER = [48.8566, 2.3522];
 const DEFAULT_ZOOM = 6;
 const POPUP_OPTIONS = { maxWidth: 600, maxHeight: 500 };
+const NOTAM_POPUP_OPTIONS = { ...POPUP_OPTIONS, minWidth: 580 };
 const FIT_BOUNDS_PADDING = { padding: [50, 50] };
 const NM_TO_METERS = 1852;
 const NM_TO_KILOMETERS = 1.852;
@@ -1557,6 +1558,44 @@ function buildListItemHtml(group, posIndex) {
 	`;
 }
 
+// Insert visible ↩ markers at soft-wrap points within a <pre> block.
+// Markers are absolutely positioned and `user-select: none` so they appear
+// in the view but never end up in the clipboard when text is copied.
+function decorateWrapPoints(pre) {
+	const original = pre.textContent;
+	if (!original) return;
+	const lines = original.split('\n');
+	pre.textContent = '';
+
+	const lineSpans = [];
+	for (let i = 0; i < lines.length; i++) {
+		if (i > 0) pre.appendChild(document.createTextNode('\n'));
+		const line = lines[i];
+		if (!line) { lineSpans.push(null); continue; }
+		const span = document.createElement('span');
+		span.textContent = line;
+		pre.appendChild(span);
+		lineSpans.push(span);
+	}
+
+	const preRect = pre.getBoundingClientRect();
+	for (const span of lineSpans) {
+		if (!span) continue;
+		const range = document.createRange();
+		range.selectNodeContents(span);
+		const rects = range.getClientRects();
+		if (rects.length < 2) continue;
+		for (let r = 0; r < rects.length - 1; r++) {
+			const marker = document.createElement('span');
+			marker.className = 'wrap-marker';
+			marker.textContent = '↩';
+			marker.style.top = (rects[r].top - preRect.top) + 'px';
+			marker.style.left = (rects[r].right - preRect.left) + 'px';
+			pre.appendChild(marker);
+		}
+	}
+}
+
 // Set up marker event handlers for popup navigation and radius circle
 function setupMarkerEvents(marker, group, navInfo, markerMap) {
 	const { groupIndex, totalAtLocation, hasMultipleAtLocation, groupsAtLocation } = navInfo;
@@ -1568,6 +1607,9 @@ function setupMarkerEvents(marker, group, navInfo, markerMap) {
 			const nm = radiusToNM(group.radius, group.radiusUnit || 'NM');
 			showRadiusCircle(group.lat, group.lon, nm, '#0078d4');
 		}
+
+		const popupEl = marker.getPopup().getElement();
+		if (popupEl) popupEl.querySelectorAll('.popup-content').forEach(decorateWrapPoints);
 
 		if (hasMultipleAtLocation) {
 			const popup = marker.getPopup().getElement();
@@ -1686,6 +1728,9 @@ function setupPolygonEvents(polygon, navInfo, polygonMap, centroidKey) {
 	polygon.on('popupopen', () => {
 		polygon.setStyle(polygonHighlightStyle);
 
+		const popupEl = polygon.getPopup().getElement();
+		if (popupEl) popupEl.querySelectorAll('.popup-content').forEach(decorateWrapPoints);
+
 		if (hasMultiple) {
 			const popup = polygon.getPopup().getElement();
 			const prevBtn = popup.querySelector('.popup-nav-prev');
@@ -1765,7 +1810,7 @@ function parseAndDisplay() {
 			}).addTo(map);
 			polygon._area = computePolygonArea(notam.coordinates);
 
-			polygon.bindPopup(buildPolygonPopupHtml(notam, navInfo), POPUP_OPTIONS);
+			polygon.bindPopup(buildPolygonPopupHtml(notam, navInfo), NOTAM_POPUP_OPTIONS);
 			setupPolygonEvents(polygon, navInfo, polygonMap, centroidKey);
 
 			polygons.push(polygon);
@@ -1809,7 +1854,7 @@ function parseAndDisplay() {
 		const icon = group.hasQualifierLine ? blueIcon : redIcon;
 		const marker = L.marker([group.lat, group.lon], { icon, zIndexOffset }).addTo(map);
 
-		marker.bindPopup(buildPopupHtml(group, navInfo), POPUP_OPTIONS);
+		marker.bindPopup(buildPopupHtml(group, navInfo), NOTAM_POPUP_OPTIONS);
 		setupMarkerEvents(marker, group, navInfo, markerMap);
 
 		markers.push(marker);
