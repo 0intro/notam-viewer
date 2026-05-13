@@ -1502,9 +1502,11 @@ function buildPopupHtml(group, navInfo) {
 			<div class="popup-header">
 				${icaoDisplay}
 				<div class="popup-coords">${formatDMS(group.lat, group.lon)}</div>
-				${countBadge}
+				<div class="popup-header-right">
+					${radiusInfo}
+					${countBadge}
+				</div>
 			</div>
-			${radiusInfo}
 			<div class="popup-notams-list">
 				${notamsList}
 			</div>

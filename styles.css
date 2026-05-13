@@ -359,8 +359,13 @@ button:hover {
 	padding: 3px 8px;
 	border-radius: 4px;
 	font-size: 11px;
-	margin-bottom: 8px;
-	display: inline-block;
+	flex-shrink: 0;
+}
+
+.popup-header-right {
+	display: flex;
+	align-items: center;
+	gap: 8px;
 	flex-shrink: 0;
 }
 
