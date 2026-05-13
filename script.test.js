@@ -871,6 +871,7 @@ const statisticsTests = [
 	{ file: 'LSHJ-ZBAA-20260209.txt', all: 1337, noPosition: 472, positions: 755, areas: 110 },
 	{ file: 'SBBE-VIDP-20260209.txt', all: 315, noPosition: 257, positions: 33, areas: 25 },
 	{ file: 'World-20260207.txt', all: 36725, noPosition: 25472, positions: 7575, areas: 3678 },
+	{ file: 'World-20260512.txt', all: 23227, noPosition: 14293, positions: 6441, areas: 2493 },
 ];
 
 // NOTAMs to be investigated: coordinates far from Q-line due to
@@ -910,6 +911,23 @@ const coordinateExclusions = new Set([
 	// Malformed source coords (DMS minutes/seconds > 60)
 	'WMKK-A0016/26',  // E section lists "027437N, 1016897E" (74' minutes invalid)
 	'LTAA-D2396/25',  // E section lists "399424.55N 0327544.87E" (94' minutes invalid)
+	// World-20260512.txt uses bare NOTAM IDs (no FIR prefix)
+	'A0434/26',       // Q-line centre wrong, coordinates 207NM away
+	'A0629/26',       // Q-line centre wrong, coordinates 51NM away
+	'A1446/26',       // Q-line centre wrong, coordinates 159NM away
+	'D0544/26',       // 94' minutes invalid (same pattern as LTAA-D2396/25)
+	'D0780/26',       // extra digit in latitude: 0670033.69N
+	'E0806/26',       // Q-line centre wrong, coordinates 78NM away
+	'E0893/26',       // Q-line centre wrong, coordinates 46NM away
+	'G0424/26',       // invalid coordinate: 000000.0N (lat=0)
+	'H3041/26',       // Q-line centre wrong, coordinates 110NM away
+	'M0021/25',       // Q-line centre wrong (also as LIIC-/LIIA- variants)
+	'M2022/25',       // Q-line centre wrong (also as LIIC- variant)
+	'M4598/24',       // Q-line centre wrong (also as LIIC- variant)
+	'M4599/24',       // Q-line centre wrong (also as LIIC- variant)
+	'M5534/26',       // 94' minutes invalid (same pattern as LTAA-D2396/25)
+	'P1629/26',       // Q-line centre wrong, coordinates 64NM away
+	'U1184/23',       // Q-line radius too small for route extent (also as UUUU- variant)
 ]);
 
 function assertCoordinatesNearQualifierLine(notams, maxDist) {
