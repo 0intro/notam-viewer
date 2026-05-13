@@ -348,7 +348,7 @@ describe('parseNotams - positions', () => {
 	const notams = parseNotams(positionsText);
 
 	it('should parse all position NOTAMs', () => {
-		assert.equal(notams.length, 26);
+		assert.equal(notams.length, 28);
 	});
 
 	it('should not mark any position NOTAM as polygon', () => {
@@ -455,6 +455,22 @@ describe('parseNotams - positions', () => {
 		assertNear(n.coordinates[0].lon, 16.035, 'lon');
 		assert.equal(n.coordinates[0].radius, 500);
 		assert.equal(n.coordinates[0].radiusUnit, 'M');
+	});
+
+	it('should parse PSN with no separator and decimal seconds (P0436/26)', () => {
+		const n = findNotam(notams, 'P0436/26');
+		assert.ok(n);
+		assert.equal(n.coordinates[0].type, 'psn');
+		assertNear(n.coordinates[0].lat, 44.5992, 'lat');
+		assertNear(n.coordinates[0].lon, 3.867, 'lon');
+	});
+
+	it('should parse French comma-as-decimal-separator (P1217/26)', () => {
+		const n = findNotam(notams, 'P1217/26');
+		assert.ok(n);
+		assert.equal(n.coordinates[0].type, 'psn');
+		assertNear(n.coordinates[0].lat, 48.6546, 'lat');
+		assertNear(n.coordinates[0].lon, 5.4839, 'lon');
 	});
 
 	it('should parse helipad FATO with dash lat/lon and DIAMETRE keyword (H0141/26)', () => {
@@ -821,18 +837,18 @@ describe('parseNotams - areas', () => {
 // Integration tests: statistics
 
 const statisticsTests = [
-	{ file: 'Europe-20260203.txt', all: 10830, noPosition: 7256, positions: 2567, areas: 1007 },
-	{ file: 'LPPT-EPWA-20260207.txt', all: 975, noPosition: 403, positions: 451, areas: 121 },
+	{ file: 'Europe-20260203.txt', all: 10896, noPosition: 7172, positions: 2714, areas: 1010 },
+	{ file: 'LPPT-EPWA-20260207.txt', all: 983, noPosition: 393, positions: 467, areas: 123 },
 	{ file: 'EGPD-LFKC-20260207.txt', all: 676, noPosition: 226, positions: 408, areas: 42 },
 	{ file: 'KJFK-KLAX-20260209.txt', all: 449, noPosition: 355, positions: 93, areas: 1 },
 	{ file: 'CYQB-CYVR-20260209.txt', all: 366, noPosition: 121, positions: 243, areas: 2 },
-	{ file: 'CYTZ-SAWG-20260209.txt', all: 552, noPosition: 375, positions: 161, areas: 16 },
-	{ file: 'EGLL-FACT-20260209.txt', all: 758, noPosition: 381, positions: 328, areas: 49 },
+	{ file: 'CYTZ-SAWG-20260209.txt', all: 554, noPosition: 367, positions: 166, areas: 21 },
+	{ file: 'EGLL-FACT-20260209.txt', all: 761, noPosition: 379, positions: 333, areas: 49 },
 	{ file: 'ENGM-YSCB-20260209.txt', all: 520, noPosition: 269, positions: 160, areas: 91 },
-	{ file: 'LEMD-UHWW-20260209.txt', all: 1433, noPosition: 595, positions: 657, areas: 181 },
-	{ file: 'LSHJ-ZBAA-20260209.txt', all: 1337, noPosition: 474, positions: 754, areas: 109 },
-	{ file: 'SBBE-VIDP-20260209.txt', all: 310, noPosition: 264, positions: 24, areas: 22 },
-	{ file: 'World-20260207.txt', all: 36547, noPosition: 26339, positions: 6612, areas: 3596 },
+	{ file: 'LEMD-UHWW-20260209.txt', all: 1436, noPosition: 594, positions: 661, areas: 181 },
+	{ file: 'LSHJ-ZBAA-20260209.txt', all: 1337, noPosition: 473, positions: 755, areas: 109 },
+	{ file: 'SBBE-VIDP-20260209.txt', all: 315, noPosition: 259, positions: 33, areas: 23 },
+	{ file: 'World-20260207.txt', all: 36725, noPosition: 25480, positions: 7571, areas: 3674 },
 ];
 
 // NOTAMs to be investigated: coordinates far from Q-line due to
@@ -871,6 +887,7 @@ const coordinateExclusions = new Set([
 	'VIDP-A0122/26',  // base at Shahpura 35NM from Q-centre, Q-radius 13NM
 	// Malformed source coords (DMS minutes/seconds > 60)
 	'WMKK-A0016/26',  // E section lists "027437N, 1016897E" (74' minutes invalid)
+	'LTAA-D2396/25',  // E section lists "399424.55N 0327544.87E" (94' minutes invalid)
 ]);
 
 function assertCoordinatesNearQualifierLine(notams, maxDist) {

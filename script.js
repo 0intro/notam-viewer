@@ -252,7 +252,11 @@ function parseDMSComponent(str, degDigits) {
 
 // Parse DMS coordinate string to decimal degrees
 function parseDMSCoordinate(coordStr) {
-	coordStr = coordStr.trim();
+	// French NOTAMs (e.g. P1217/26) use comma as decimal separator inside
+	// coords ("483916,433N"). Normalise to dot so downstream regex/parseFloat
+	// work uniformly; a comma between lat and lon has already been consumed
+	// as a separator by the caller's coord regex.
+	coordStr = coordStr.trim().replace(/,/g, '.');
 
 	// Try to match format with space first: "484024N 0030441E"
 	// Then try format without space: "161514N0611540W"
@@ -604,11 +608,16 @@ function parseNotams(text) {
 					}
 				}
 
-				// Find all coordinate-like patterns in the E) section
-				// Matches patterns like: 422726N 0064355W, 4227N 00643W, 455554.997N 0060439.322E,
-				// or comma-joined 470240N,0001500W (French SUP AIP polygons),
-				// or dash-joined 452552N - 0065936E (helipad FATO style, H0141/26).
-				const coordPattern = /(\d{4,7}(?:\.\d+)?)([NS])(?:\s+|\s*[,-]\s*)(\d{5,8}(?:\.\d+)?)([EW])|(\d{6})([NS])(\d{7})([EW])/gi;
+				// Find all coordinate-like patterns in the E) section.
+				// Supported formats:
+				//   "422726N 0064355W"           space separator
+				//   "470240N,0001500W"           comma between lat/lon
+				//   "452552N - 0065936E"         dash between lat/lon
+				//   "455554.997N 0060439.322E"   decimal seconds with space
+				//   "443557.2N0035201.12E"       decimal seconds, no separator
+				//   "483916,433N 0052902,045E"   French comma-as-decimal-point
+				//   "161514N0611540W"            fixed 6+7 digits, no separator
+				const coordPattern = /(\d{4,7}(?:[.,]\d+)?)([NS])(?:\s+|\s*[,-]\s*)?(\d{5,8}(?:[.,]\d+)?)([EW])|(\d{6})([NS])(\d{7})([EW])/gi;
 				let match;
 				let groupClosed = false;
 
