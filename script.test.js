@@ -457,6 +457,20 @@ describe('parseNotams - positions', () => {
 		assert.equal(n.coordinates[0].radiusUnit, 'M');
 	});
 
+	it('should anchor RDL <bearing>/<distance> ARP <ICAO> to airport coord', () => {
+		const sample = 'R0000/26\nQ) LFRR/QOLAS/IV/M/AE/000/004/4715N00135W003\n' +
+			'A) LFRS B) 2601010000 C) PERM\nE) BALISAGE D\'EOLIENNES HORS SERVICE\n' +
+			'RDL 252/13NM ARP LFRS\nHAUTEUR : 400FT\n\n';
+		const lookupAirport = (ident) => ident === 'LFRS' ? { lat: 47.1531, lon: -1.6107 } : null;
+		const without = parseNotams(sample);
+		assert.equal(without[0].coordinates[0].type, 'qualifierLine');
+		const with_ = parseNotams(sample, { lookupAirport });
+		assert.equal(with_[0].coordinates[0].type, 'psn');
+		// 13 NM at bearing 252° from (47.1531, -1.6107)
+		assertNear(with_[0].coordinates[0].lat, 47.086, 'anchored lat');
+		assertNear(with_[0].coordinates[0].lon, -1.913, 'anchored lon');
+	});
+
 	it('should parse PSN with space between digits and hemisphere (P1484/26)', () => {
 		const n = findNotam(notams, 'P1484/26');
 		assert.ok(n);

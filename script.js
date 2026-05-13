@@ -539,8 +539,47 @@ function parseSections(content) {
 	return sections;
 }
 
-// Parse NOTAMs and extract those with coordinates
-function parseNotams(text) {
+// Extract an airport-anchored position spec from the E section, e.g.
+// "RDL 031/5.4NM ARP LFAI" (bearing 31°, 5.4 NM from airport reference
+// point of LFAI). Used as a fallback when no DMS coord is present.
+function extractAirportAnchor(eContent) {
+	const m = eContent.match(/\bRDL\s*(\d{1,3})(?:DEG)?\s*\/\s*(\d+(?:[.,]\d+)?)\s*(NM|KM|M)\s+ARP\s+([A-Z]{4})\b/i);
+	if (!m) return null;
+	return {
+		bearing: parseFloat(m[1]),
+		distance: parseFloat(m[2].replace(',', '.')),
+		distanceUnit: m[3].toUpperCase(),
+		ident: m[4].toUpperCase()
+	};
+}
+
+// Move `distance` (in `unit`) along true bearing `bearing` (degrees from
+// north, clockwise) from the airport coord. Planar approximation — good to
+// ~50 m at the few-NM scale typical of RDL specs. French RDLs are technically
+// magnetic; the resulting error in France is ~1-2° of bearing, well within
+// other NOTAM-source noise.
+function computeAirportAnchoredPosition(anchor, airportCoord) {
+	const dist = anchor.distance * (
+		anchor.distanceUnit === 'NM' ? NM_TO_METERS :
+			anchor.distanceUnit === 'KM' ? 1000 : 1
+	);
+	const bearingRad = anchor.bearing * Math.PI / 180;
+	const dy = dist * Math.cos(bearingRad);
+	const dx = dist * Math.sin(bearingRad);
+	const M_PER_DEG = 111320;
+	const cosLat = Math.cos(airportCoord.lat * Math.PI / 180);
+	return {
+		lat: airportCoord.lat + dy / M_PER_DEG,
+		lon: airportCoord.lon + dx / (cosLat * M_PER_DEG)
+	};
+}
+
+// Parse NOTAMs and extract those with coordinates.
+// opts.lookupAirport: optional (ident) => {lat, lon} | null. When provided,
+// NOTAMs that produce no DMS coord but contain "RDL <bearing>/<distance>
+// ARP <ICAO>" gain a position computed from the airport coord.
+function parseNotams(text, opts = {}) {
+	const lookupAirport = opts.lookupAirport;
 	const notams = [];
 	const seenIds = new Set();
 
@@ -728,6 +767,25 @@ function parseNotams(text) {
 			}
 			coordinateGroups.length = 0;
 			coordinateGroups.push(...filtered);
+		}
+
+		// Try an airport-anchored position before falling back to the Q-line:
+		// "RDL <bearing>/<distance> ARP <ICAO>" can pin a NOTAM that lacks a
+		// DMS coord (e.g. obstacle NOTAMs referenced only by airport bearing).
+		if (coordinateGroups.length === 0 && eContent && lookupAirport) {
+			const anchor = extractAirportAnchor(eContent);
+			if (anchor) {
+				const ap = lookupAirport(anchor.ident);
+				if (ap) {
+					const pos = computeAirportAnchoredPosition(anchor, ap);
+					coordinateGroups.push([{
+						original: `RDL ${anchor.bearing}/${anchor.distance}${anchor.distanceUnit} ARP ${anchor.ident}`,
+						lat: pos.lat,
+						lon: pos.lon,
+						type: 'psn'
+					}]);
+				}
+			}
 		}
 
 		// Find qualifier line coordinates only if no PSN coordinates found
@@ -1293,9 +1351,25 @@ function setupPolygonEvents(polygon, navInfo, polygonMap, centroidKey) {
 }
 
 // Main function to parse and display
+// Build a fast ICAO-ident → {lat, lon} lookup over the loaded airport data,
+// or null if airports haven't been loaded yet. Lazy: the index is built on
+// first call and cached on airportData.
+function buildAirportLookup() {
+	if (!airportData) return null;
+	if (!airportData._byIdent) {
+		const m = new Map();
+		for (const row of airportData.rows) m.set(row[AIRPORT_IDX.IDENT], row);
+		airportData._byIdent = m;
+	}
+	return (ident) => {
+		const row = airportData._byIdent.get(ident);
+		return row ? { lat: row[AIRPORT_IDX.LAT], lon: row[AIRPORT_IDX.LON] } : null;
+	};
+}
+
 function parseAndDisplay() {
 	const input = document.getElementById('notamInput').value;
-	const notams = parseNotams(input);
+	const notams = parseNotams(input, { lookupAirport: buildAirportLookup() });
 	const listEl = document.getElementById('coordinatesList');
 	const showAll = document.getElementById('showAllNotams').checked;
 
@@ -1870,6 +1944,7 @@ function hideAirportsLoading() {
 
 async function onAirportOverlayAdd(e) {
 	if (e.layer !== airportLayer) return;
+	const wasPopulated = airportsPopulated;
 	if (!airportsPopulated) {
 		try {
 			showAirportsLoading();
@@ -1885,6 +1960,11 @@ async function onAirportOverlayAdd(e) {
 		}
 	}
 	refreshAirportTypeVisibility();
+	// Re-render now that airport coords are available — NOTAMs anchored
+	// via "RDL <bearing>/<distance> ARP <ICAO>" can now resolve positions.
+	if (!wasPopulated && document.getElementById('notamInput').value.trim()) {
+		parseAndDisplay();
+	}
 }
 
 function setupAirportOverlay() {
