@@ -653,3 +653,33 @@ footer a:hover {
 .back-link a:hover {
 	text-decoration: underline;
 }
+
+.successor-banner {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 12px;
+	margin-bottom: 20px;
+	padding: 12px 20px;
+	background: #f0f7ff;
+	border: 1px solid #cfe2f9;
+	border-left: 4px solid #1f5fbf;
+	border-radius: 8px;
+	color: #1f5fbf;
+	text-decoration: none;
+	font-size: 0.95rem;
+	transition: background 0.2s;
+}
+
+.successor-banner:hover {
+	background: #e1eeff;
+}
+
+.successor-banner strong {
+	font-weight: 600;
+}
+
+.successor-banner__cta {
+	font-weight: 600;
+	white-space: nowrap;
+}

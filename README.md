@@ -1,5 +1,9 @@
 # NOTAM Viewer
 
+This tool grew into [Loxodrome](https://loxodrome.fr/), a flight-preparation
+and navigation application for general aviation. What follows is the original
+NOTAM plotter, still running at <https://notam-viewer.net/>.
+
 A web-based tool to parse NOTAMs (Notice to Airmen) and display their geographic coordinates on an interactive map.
 
 ![Screenshot](images/screenshot.png)
